@@ -1,0 +1,7 @@
+[user]
+	name = James Kan Kian Hao
+	email = 181921580+Shadowress@users.noreply.github.com
+[init]
+	defaultBranch = main
+[include]
+	path = /home/james/.gitconfig.local
