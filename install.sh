@@ -21,6 +21,7 @@ touch "$DOTFILES/common/git/.gitconfig.local"
 
 ln -sf "$DOTFILES/common/git/.gitconfig" "$HOME/.gitconfig"
 ln -sf "$DOTFILES/common/git/.gitconfig.local" "$HOME/.gitconfig.local"
+ln -sf "$DOTFILES/common/nvim" "$CONFIG/nvim"
 
 install_git_credential_manager() {
     git config --global include.path "$HOME/.gitconfig.local"
