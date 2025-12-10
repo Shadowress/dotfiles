@@ -35,7 +35,9 @@ return {
 
             local servers = mason_lspconfig.get_installed_servers()
             for _, server in ipairs(servers) do
-                if server == "lua_ls" then
+                if server == "jdtls" then
+                    -- skip
+                elseif server == "lua_ls" then
                     lspconfig.lua_ls.setup({
                         settings = {
                             Lua = { diagnostics = { globals = { "vim" } } },
@@ -47,6 +49,12 @@ return {
             end
 		end
 	},
+
+    {
+        "mfussenegger/nvim-jdtls",
+        ft = { "java" },
+        lazy = true,
+    },
 
 	{
 		"WhoIsSethDaniel/mason-tool-installer.nvim",
@@ -77,7 +85,6 @@ return {
 			})
 		end
 	},
-
 
 	{
 		"VonHeikemen/lsp-zero.nvim",
