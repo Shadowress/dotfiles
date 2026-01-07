@@ -5,3 +5,5 @@
 	defaultBranch = main
 [include]
 	path = /home/james/.gitconfig.local
+[rerere]
+	enabled = true
