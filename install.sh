@@ -1,79 +1,34 @@
-set -e
+#!/usr/bin/env bash
 
-DOTFILES="$HOME/.dotfiles"
+DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG="$HOME/.config"
 
-case "$(uname -s)" in
-    Linux*)
-        if grep -qi microsoft /proc/version; then
-            OS="wsl"
-        else
-            OS="linux"
-        fi
-        ;;
-    Darwin*) OS="mac" ;;
-    CYGWIN*|MINGW*|MSYS*) OS="windows" ;;
-    *) OS="unknown" ;;
-esac
+source "$DOTFILES/lib/core.sh"
+source "$DOTFILES/lib/environment.sh"
+source "$DOTFILES/lib/logging.sh"
+source "$DOTFILES/lib/package_manager.sh"
+source "$DOTFILES/lib/platform.sh"
 
-mkdir -p "$CONFIG"
-touch "$DOTFILES/common/git/.gitconfig.local"
+main() {
+    detect_os || return 1
 
-ln -sf "$DOTFILES/common/git/.gitconfig" "$HOME/.gitconfig"
-ln -sf "$DOTFILES/common/git/.gitconfig.local" "$HOME/.gitconfig.local"
-ln -sf "$DOTFILES/common/nvim" "$CONFIG/nvim"
+    load_setup_files "$DOTFILES/platforms/$OS" || return 1
+    load_setup_files "$DOTFILES/apps" || return 1
 
-install_git_credential_manager() {
-    git config --global include.path "$HOME/.gitconfig.local"
+    setup_directories || return 1
 
-    case "$OS" in
-        windows)
-            git config --file "$HOME/.gitconfig.local" credential.helper manager-core
-            ;;
+    reset_setup_counts
 
-        wsl)
-            git config --file "$HOME/.gitconfig.local" credential.helper "/mnt/c/Program\ Files/Git/mingw64/bin/git-credential-manager.exe"
-            ;;
+    prepare_package_manager || return 1
 
-        linux)
-            if command -v curl &>/dev/null; then
-                if ! command -v git-credential-manager &>/dev/null; then
-                    curl -fsSL https://aka.ms/gcm/linux-install-source.sh -o /tmp/gcm-install.sh
-                    bash /tmp/gcm-install.sh install
-                    rm -f /tmp/gcm-install.sh
+    setup_platform || return 1
+    setup_shared || return 1
 
-                    sudo apt update
-                    sudo apt install -y libsecret-1-0 libsecret-1-dev gnome-keyring
-                fi
+    print_setup_summary
 
-                git config --file "$HOME/.gitconfig.local" credential.helper manager
-                git config --file "$HOME/.gitconfig.local" credential.credentialStore secretservice
-            else
-                echo "⚠️  Curl not found. Please install Git Credential Manager manually:"
-                echo "https://aka.ms/gcm/linux"
-            fi
-            ;;
-
-        mac)
-            if command -v brew &>/dev/null; then
-                if ! command -v git-credential-manager &>/dev/null; then
-                    brew install --cask git-credential-manager
-                fi
-
-                git config --file "$HOME/.gitconfig.local" credential.helper manager
-            else
-                echo "⚠️  Homebrew not found. Please install Git Credential Manager manually:"
-                echo "https://aka.ms/gcm/mac"
-            fi
-            ;;
-        *)
-    esac
+    (( SETUP_FAILED <= 0 )) || return 1
 }
 
-case "$OS" in
-    linux|wsl|mac|windows)
-        install_git_credential_manager
-        ;;
-    *)
-esac
-
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

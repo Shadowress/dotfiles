@@ -28,4 +28,3 @@ bash install.sh
 ⚠️ Note for Windows users:
 PowerShell and Command Prompt do not support Bash scripts.
 Please use Git Bash (installed automatically with Git for Windows) to run the command.
-
