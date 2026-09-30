@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]] $InstallArguments
+    [string[]] $InstallArguments = @()
 )
 
 Set-StrictMode -Version Latest

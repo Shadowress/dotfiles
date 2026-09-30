@@ -3,63 +3,20 @@
 set -uo pipefail
 
 TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$TEST_ROOT/tests/lib/test_helpers.sh"
+
 BOOTSTRAP_DEFINITIONS="$(
-    awk '/^main "\$@"$/ { exit } { print }' "$TEST_ROOT/bootstrap.sh"
+    script_before_line "$TEST_ROOT/bootstrap.sh" 'main "$@"'
 )"
-TESTS_PASSED=0
-TESTS_FAILED=0
-
-pass() {
-    TESTS_PASSED=$((TESTS_PASSED + 1))
-    printf '[OK] Test: %s\n' "$1"
-}
-
-fail_test() {
-    TESTS_FAILED=$((TESTS_FAILED + 1))
-    printf '[ERROR] Test: %s\n' "$1" >&2
-}
-
-run_test() {
-    if "$2"; then
-        pass "$1"
-    else
-        fail_test "$1"
-    fi
-}
-
-make_temp_directory() {
-    mktemp -d "${TMPDIR:-/tmp}/dotfiles-bootstrap-test.XXXXXX"
-}
-
-remove_temp_directory() {
-    case "$1" in
-        "${TMPDIR:-/tmp}"/dotfiles-bootstrap-test.*) rm -rf -- "$1" ;;
-        *)
-            printf 'Refusing to remove unexpected test path: %s\n' "$1" >&2
-            return 1
-            ;;
-    esac
-}
 
 load_bootstrap() {
     eval "$BOOTSTRAP_DEFINITIONS"
 }
 
-create_repository() {
-    local repository="$1"
-    local installer_body="${2:-exit 0}"
-
-    mkdir -p "$repository" || return 1
-    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
-        git -C "$repository" init --quiet || return 1
-    printf '#!/usr/bin/env bash\n%s\n' "$installer_body" \
-        > "$repository/install.sh"
-}
-
 test_status_format() (
     local temporary_home
-    temporary_home="$(make_temp_directory)" || return 1
-    trap 'remove_temp_directory "$temporary_home"' EXIT
+    temporary_home="$(make_test_directory dotfiles-bootstrap-test)" || return 1
+    trap 'remove_test_directory "$temporary_home" dotfiles-bootstrap-test' EXIT
     HOME="$temporary_home"
     load_bootstrap
 
@@ -72,8 +29,8 @@ test_linux_package_managers() (
     local temporary_home
     local test_distro
 
-    temporary_home="$(make_temp_directory)" || return 1
-    trap 'remove_temp_directory "$temporary_home"' EXIT
+    temporary_home="$(make_test_directory dotfiles-bootstrap-test)" || return 1
+    trap 'remove_test_directory "$temporary_home" dotfiles-bootstrap-test' EXIT
     HOME="$temporary_home"
     mkdir "$temporary_home/bin"
     for executable in apt-get dnf pacman; do
@@ -107,12 +64,10 @@ test_linux_package_managers() (
 )
 
 test_mac_requests_command_line_tools() (
-    local output
-    local status
     local temporary_home
 
-    temporary_home="$(make_temp_directory)" || return 1
-    trap 'remove_temp_directory "$temporary_home"' EXIT
+    temporary_home="$(make_test_directory dotfiles-bootstrap-test)" || return 1
+    trap 'remove_test_directory "$temporary_home" dotfiles-bootstrap-test' EXIT
     HOME="$temporary_home"
     mkdir "$temporary_home/bin"
     printf '#!/usr/bin/env bash\nprintf requested > "$REQUEST_MARKER"\n' \
@@ -124,24 +79,21 @@ test_mac_requests_command_line_tools() (
     load_bootstrap
     uname() { printf 'Darwin\n'; }
 
-    set +e
-    output="$(install_git 2>&1)"
-    status=$?
-    set -e
+    capture_command install_git
 
-    [[ $status -ne 0 ]] && [[ -f "$REQUEST_MARKER" ]] &&
-        [[ "$output" == *'[ERROR] Git:'* ]]
+    [[ $CAPTURED_STATUS -ne 0 ]] && [[ -f "$REQUEST_MARKER" ]] &&
+        [[ "$CAPTURED_OUTPUT" == *'[ERROR] Git:'* ]]
 )
 
 test_existing_repository_and_arguments() (
     local output
     local temporary_home
 
-    temporary_home="$(make_temp_directory)" || return 1
-    trap 'remove_temp_directory "$temporary_home"' EXIT
+    temporary_home="$(make_test_directory dotfiles-bootstrap-test)" || return 1
+    trap 'remove_test_directory "$temporary_home" dotfiles-bootstrap-test' EXIT
     HOME="$temporary_home"
-    create_repository "$HOME/.dotfiles" \
-        'printf "installer arguments: <%s>\n" "$1"' || return 1
+    create_test_repository "$HOME/.dotfiles" \
+        'printf "installer argument: <%s>\n" "$@"' || return 1
     load_bootstrap
     uname() { printf 'Linux\n'; }
     find_usable_git() {
@@ -149,10 +101,15 @@ test_existing_repository_and_arguments() (
         return 0
     }
 
-    output="$(main 'literal;$(touch should-not-run)')" || return 1
+    output="$(
+        main '--minimal' '--include=nvim,dotnet' \
+            'literal;$(touch should-not-run)'
+    )" || return 1
     [[ "$output" == *'[OK] Git:'* ]] &&
         [[ "$output" == *'[OK] Dotfiles:'* ]] &&
-        [[ "$output" == *'installer arguments: <literal;$(touch should-not-run)>'* ]] &&
+        [[ "$output" == *'installer argument: <--minimal>'* ]] &&
+        [[ "$output" == *'installer argument: <--include=nvim,dotnet>'* ]] &&
+        [[ "$output" == *'installer argument: <literal;$(touch should-not-run)>'* ]] &&
         [[ "$output" == *'[OK] Bootstrap: Installation completed.'* ]] &&
         [[ ! -e "$temporary_home/should-not-run" ]]
 )
@@ -162,10 +119,10 @@ test_git_install_then_handoff() (
     local output
     local temporary_home
 
-    temporary_home="$(make_temp_directory)" || return 1
-    trap 'remove_temp_directory "$temporary_home"' EXIT
+    temporary_home="$(make_test_directory dotfiles-bootstrap-test)" || return 1
+    trap 'remove_test_directory "$temporary_home" dotfiles-bootstrap-test' EXIT
     HOME="$temporary_home"
-    create_repository "$HOME/.dotfiles" || return 1
+    create_test_repository "$HOME/.dotfiles" || return 1
     load_bootstrap
     installed_marker="$temporary_home/git-installed"
     uname() { printf 'Linux\n'; }
@@ -182,10 +139,10 @@ test_git_install_then_handoff() (
 test_existing_remote_is_not_policy() (
     local temporary_home
 
-    temporary_home="$(make_temp_directory)" || return 1
-    trap 'remove_temp_directory "$temporary_home"' EXIT
+    temporary_home="$(make_test_directory dotfiles-bootstrap-test)" || return 1
+    trap 'remove_test_directory "$temporary_home" dotfiles-bootstrap-test' EXIT
     HOME="$temporary_home"
-    create_repository "$HOME/.dotfiles" || return 1
+    create_test_repository "$HOME/.dotfiles" || return 1
     git -C "$HOME/.dotfiles" remote add origin \
         https://example.com/personal-fork/dotfiles.git || return 1
     load_bootstrap
@@ -195,34 +152,27 @@ test_existing_remote_is_not_policy() (
 )
 
 test_nested_repository_is_rejected() (
-    local output
-    local status
     local temporary_home
 
-    temporary_home="$(make_temp_directory)" || return 1
-    trap 'remove_temp_directory "$temporary_home"' EXIT
+    temporary_home="$(make_test_directory dotfiles-bootstrap-test)" || return 1
+    trap 'remove_test_directory "$temporary_home" dotfiles-bootstrap-test' EXIT
     HOME="$temporary_home"
     git -C "$HOME" init --quiet || return 1
     mkdir "$HOME/.dotfiles" || return 1
     load_bootstrap
     GIT_EXECUTABLE="$(type -P git)"
 
-    set +e
-    output="$(validate_existing_repository 2>&1)"
-    status=$?
-    set -e
-    [[ $status -ne 0 && "$output" == *'not the root'* ]]
+    capture_command validate_existing_repository
+    [[ $CAPTURED_STATUS -ne 0 && "$CAPTURED_OUTPUT" == *'not the root'* ]]
 )
 
 test_installer_failure_is_reported() (
-    local output
-    local status
     local temporary_home
 
-    temporary_home="$(make_temp_directory)" || return 1
-    trap 'remove_temp_directory "$temporary_home"' EXIT
+    temporary_home="$(make_test_directory dotfiles-bootstrap-test)" || return 1
+    trap 'remove_test_directory "$temporary_home" dotfiles-bootstrap-test' EXIT
     HOME="$temporary_home"
-    create_repository "$HOME/.dotfiles" 'exit 23' || return 1
+    create_test_repository "$HOME/.dotfiles" 'exit 23' || return 1
     load_bootstrap
     uname() { printf 'Linux\n'; }
     find_usable_git() {
@@ -230,20 +180,15 @@ test_installer_failure_is_reported() (
         return 0
     }
 
-    set +e
-    output="$(main 2>&1)"
-    status=$?
-    set -e
-    [[ $status -ne 0 && "$output" == *'exit code 23'* ]]
+    capture_command main
+    [[ $CAPTURED_STATUS -ne 0 && "$CAPTURED_OUTPUT" == *'exit code 23'* ]]
 )
 
 test_existing_file_is_rejected() (
-    local output
-    local status
     local temporary_home
 
-    temporary_home="$(make_temp_directory)" || return 1
-    trap 'remove_temp_directory "$temporary_home"' EXIT
+    temporary_home="$(make_test_directory dotfiles-bootstrap-test)" || return 1
+    trap 'remove_test_directory "$temporary_home" dotfiles-bootstrap-test' EXIT
     HOME="$temporary_home"
     printf 'not a repository\n' > "$HOME/.dotfiles"
     load_bootstrap
@@ -253,22 +198,17 @@ test_existing_file_is_rejected() (
         return 0
     }
 
-    set +e
-    output="$(main 2>&1)"
-    status=$?
-    set -e
-    [[ $status -ne 0 && "$output" == *'not a directory'* ]]
+    capture_command main
+    [[ $CAPTURED_STATUS -ne 0 && "$CAPTURED_OUTPUT" == *'not a directory'* ]]
 )
 
 test_missing_installer_is_rejected() (
-    local output
-    local status
     local temporary_home
 
-    temporary_home="$(make_temp_directory)" || return 1
-    trap 'remove_temp_directory "$temporary_home"' EXIT
+    temporary_home="$(make_test_directory dotfiles-bootstrap-test)" || return 1
+    trap 'remove_test_directory "$temporary_home" dotfiles-bootstrap-test' EXIT
     HOME="$temporary_home"
-    create_repository "$HOME/.dotfiles" || return 1
+    create_test_repository "$HOME/.dotfiles" || return 1
     rm "$HOME/.dotfiles/install.sh"
     load_bootstrap
     uname() { printf 'Linux\n'; }
@@ -277,29 +217,23 @@ test_missing_installer_is_rejected() (
         return 0
     }
 
-    set +e
-    output="$(main 2>&1)"
-    status=$?
-    set -e
-    [[ $status -ne 0 && "$output" == *'missing or is not a file'* ]]
+    capture_command main
+    [[ $CAPTURED_STATUS -ne 0 && \
+        "$CAPTURED_OUTPUT" == *'missing or is not a file'* ]]
 )
 
 test_unsupported_os_is_rejected() (
-    local output
-    local status
     local temporary_home
 
-    temporary_home="$(make_temp_directory)" || return 1
-    trap 'remove_temp_directory "$temporary_home"' EXIT
+    temporary_home="$(make_test_directory dotfiles-bootstrap-test)" || return 1
+    trap 'remove_test_directory "$temporary_home" dotfiles-bootstrap-test' EXIT
     HOME="$temporary_home"
     load_bootstrap
     uname() { printf 'MINGW64_NT\n'; }
 
-    set +e
-    output="$(main 2>&1)"
-    status=$?
-    set -e
-    [[ $status -ne 0 && "$output" == *'Use bootstrap.ps1'* ]]
+    capture_command main
+    [[ $CAPTURED_STATUS -ne 0 && \
+        "$CAPTURED_OUTPUT" == *'Use bootstrap.ps1'* ]]
 )
 
 test_clone_contract() (
@@ -308,8 +242,8 @@ test_clone_contract() (
     local mock_git
     local temporary_home
 
-    temporary_home="$(make_temp_directory)" || return 1
-    trap 'remove_temp_directory "$temporary_home"' EXIT
+    temporary_home="$(make_test_directory dotfiles-bootstrap-test)" || return 1
+    trap 'remove_test_directory "$temporary_home" dotfiles-bootstrap-test' EXIT
     HOME="$temporary_home"
     load_bootstrap
     arguments_file="$temporary_home/arguments"
@@ -328,12 +262,10 @@ test_clone_contract() (
 
 test_clone_failure_is_reported() (
     local mock_git
-    local output
-    local status
     local temporary_home
 
-    temporary_home="$(make_temp_directory)" || return 1
-    trap 'remove_temp_directory "$temporary_home"' EXIT
+    temporary_home="$(make_test_directory dotfiles-bootstrap-test)" || return 1
+    trap 'remove_test_directory "$temporary_home" dotfiles-bootstrap-test' EXIT
     HOME="$temporary_home"
     load_bootstrap
     mock_git="$temporary_home/git"
@@ -341,11 +273,9 @@ test_clone_failure_is_reported() (
     chmod +x "$mock_git"
     GIT_EXECUTABLE="$mock_git"
 
-    set +e
-    output="$(clone_repository 2>&1)"
-    status=$?
-    set -e
-    [[ $status -ne 0 && "$output" == *'repository clone failed'* ]]
+    capture_command clone_repository
+    [[ $CAPTURED_STATUS -ne 0 && \
+        "$CAPTURED_OUTPUT" == *'repository clone failed'* ]]
 )
 
 run_test 'status output matches installer format' test_status_format
@@ -365,6 +295,4 @@ run_test 'unsupported operating systems are rejected' test_unsupported_os_is_rej
 run_test 'clone uses the fixed URL and disables prompts' test_clone_contract
 run_test 'clone failure is reported' test_clone_failure_is_reported
 
-printf '\n[SUMMARY] Bootstrap shell tests: %s/%s succeeded\n' \
-    "$TESTS_PASSED" "$((TESTS_PASSED + TESTS_FAILED))"
-(( TESTS_FAILED == 0 ))
+finish_test_suite 'Bootstrap shell tests'

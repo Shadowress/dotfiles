@@ -1,36 +1,24 @@
 [CmdletBinding()]
 param(
-    [switch] $Network
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]] $Arguments
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $RepositoryRoot = Split-Path $PSScriptRoot -Parent
-$TestsPassed = 0
-$TestsFailed = 0
+. (Join-Path $PSScriptRoot 'lib\test_reporting.ps1')
 
-function Invoke-TestSuite {
-    param(
-        [string] $Name,
-        [scriptblock] $Action
-    )
-
-    Write-Host "[INFO] Test: Running $Name."
-    try {
-        & $Action
-        if ($LASTEXITCODE -ne 0) {
-            throw "$Name exited with code $LASTEXITCODE."
-        }
-        $script:TestsPassed++
-        Write-Host "[OK] Test: $Name passed."
-    }
-    catch {
-        $script:TestsFailed++
-        Write-Host "[ERROR] Test: $($_.Exception.Message)" `
-            -ForegroundColor Red
-    }
+try {
+    $options = Resolve-TestRunnerArguments -Arguments $Arguments
 }
+catch {
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    exit 2
+}
+
+Initialize-TestReporting -ReportLevel $options.ReportLevel
 
 $Wsl = (Get-Command wsl.exe -CommandType Application |
         Select-Object -First 1).Source
@@ -38,41 +26,52 @@ $powershell = (Get-Command powershell.exe -CommandType Application |
         Select-Object -First 1).Source
 $shellBehavior = 'tests/test_bootstrap.sh'
 $shellEntry = 'tests/test_bootstrap_entry.sh'
+$installerArguments = 'tests/test_install_arguments.sh'
 $powerShellBehavior = Join-Path $PSScriptRoot 'test_bootstrap.ps1'
 $powerShellEntry = Join-Path $PSScriptRoot 'test_bootstrap_entry.ps1'
+$previousAggregate = $env:DOTFILES_TEST_AGGREGATE
 
+$env:DOTFILES_TEST_AGGREGATE = 'true'
 Push-Location $RepositoryRoot
 try {
-    Invoke-TestSuite -Name 'shell bootstrap behavior' -Action {
-        & $Wsl --cd $RepositoryRoot -- bash $shellBehavior
+    Invoke-ReportedTestSuite -Name 'shell bootstrap behavior' -Action {
+        & $Wsl --cd $RepositoryRoot -- `
+            env DOTFILES_TEST_AGGREGATE=true bash $shellBehavior
     }
-    Invoke-TestSuite -Name 'shell bootstrap entry point' -Action {
-        & $Wsl --cd $RepositoryRoot -- bash $shellEntry
+    Invoke-ReportedTestSuite -Name 'shell bootstrap entry point' -Action {
+        & $Wsl --cd $RepositoryRoot -- `
+            env DOTFILES_TEST_AGGREGATE=true bash $shellEntry
     }
-    Invoke-TestSuite -Name 'PowerShell bootstrap behavior' -Action {
+    Invoke-ReportedTestSuite -Name 'installer argument behavior' -Action {
+        & $Wsl --cd $RepositoryRoot -- `
+            env DOTFILES_TEST_AGGREGATE=true bash $installerArguments
+    }
+    Invoke-ReportedTestSuite -Name 'PowerShell bootstrap behavior' -Action {
         & $powershell -NoProfile -ExecutionPolicy Bypass `
             -File $powerShellBehavior
     }
-    Invoke-TestSuite -Name 'PowerShell bootstrap entry point' -Action {
+    Invoke-ReportedTestSuite -Name 'PowerShell bootstrap entry point' -Action {
         & $powershell -NoProfile -ExecutionPolicy Bypass `
             -File $powerShellEntry
     }
 
-    if ($Network) {
+    if ($options.Network) {
         $networkTest = 'tests/test_bootstrap_clone.sh'
-        Invoke-TestSuite -Name 'HTTPS clone integration' -Action {
-            & $Wsl --cd $RepositoryRoot -- bash $networkTest
+        Invoke-ReportedTestSuite -Name 'HTTPS clone integration' -Action {
+            & $Wsl --cd $RepositoryRoot -- `
+                env DOTFILES_TEST_AGGREGATE=true bash $networkTest
         }
     }
 }
 finally {
     Pop-Location
+    [Environment]::SetEnvironmentVariable(
+        'DOTFILES_TEST_AGGREGATE', $previousAggregate, 'Process'
+    )
 }
 
-Write-Host ''
-Write-Host ("[SUMMARY] Bootstrap test suites: {0}/{1} succeeded" -f `
-        $TestsPassed, ($TestsPassed + $TestsFailed))
+Write-CombinedTestSummary
 
-if ($TestsFailed -ne 0) {
+if ($script:TotalTestsFailed -ne 0) {
     exit 1
 }

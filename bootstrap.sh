@@ -142,6 +142,7 @@ clone_repository() {
 
 main() {
     local installer_exit_code
+    local -a install_arguments=("$@")
 
     case "$(uname -s)" in
         Linux*|Darwin*) ;;
@@ -168,7 +169,7 @@ main() {
         fail "Installer" "$DOTFILES/install.sh is missing or is not a file."
 
     print_status "INFO" "Installer" "Starting $DOTFILES/install.sh."
-    if "$BASH" "$DOTFILES/install.sh" "$@"; then
+    if "$BASH" "$DOTFILES/install.sh" "${install_arguments[@]}"; then
         print_status "OK" "Bootstrap" "Installation completed."
         return 0
     else

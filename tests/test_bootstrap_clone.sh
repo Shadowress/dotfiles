@@ -3,28 +3,16 @@
 set -euo pipefail
 
 TEST_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROBE_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/dotfiles-bootstrap-network.XXXXXX")"
+source "$TEST_ROOT/tests/lib/test_helpers.sh"
 
-cleanup() {
-    case "$PROBE_DIRECTORY" in
-        "${TMPDIR:-/tmp}"/dotfiles-bootstrap-network.*)
-            rm -rf -- "$PROBE_DIRECTORY"
-            ;;
-
-        *)
-            printf 'Refusing to remove unexpected test path: %s\n' \
-                "$PROBE_DIRECTORY" >&2
-            return 1
-            ;;
-    esac
-}
-trap cleanup EXIT
+PROBE_DIRECTORY="$(make_test_directory dotfiles-bootstrap-network)"
+trap 'remove_test_directory "$PROBE_DIRECTORY" dotfiles-bootstrap-network' EXIT
 
 HOME="$PROBE_DIRECTORY"
 export HOME
 
 BOOTSTRAP_DEFINITIONS="$(
-    awk '/^main "\$@"$/ { exit } { print }' "$TEST_ROOT/bootstrap.sh"
+    script_before_line "$TEST_ROOT/bootstrap.sh" 'main "$@"'
 )"
 eval "$BOOTSTRAP_DEFINITIONS"
 

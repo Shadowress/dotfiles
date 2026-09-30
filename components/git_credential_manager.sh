@@ -59,11 +59,23 @@ select_git_credential_manager_backend() {
             ;;
 
         wsl)
-            if find_windows_git_credential_manager_executable &>/dev/null; then
-                GIT_CREDENTIAL_MANAGER_BACKEND="windows"
-            else
-                GIT_CREDENTIAL_MANAGER_BACKEND="native"
-            fi
+            case "$ARG_WSL_GCM" in
+                native|windows)
+                    GIT_CREDENTIAL_MANAGER_BACKEND="$ARG_WSL_GCM"
+                    ;;
+
+                auto)
+                    if find_windows_git_credential_manager_executable &>/dev/null; then
+                        GIT_CREDENTIAL_MANAGER_BACKEND="windows"
+                    else
+                        GIT_CREDENTIAL_MANAGER_BACKEND="native"
+                    fi
+                    ;;
+
+                *)
+                    return 1
+                    ;;
+            esac
             ;;
 
         *)
@@ -156,28 +168,30 @@ configure_git_credential_manager_environment() {
     }
 }
 
-configure_native_git_credential_store() {
-    case "$OS" in
-        linux)
-            git config --file "$HOME/.gitconfig.local" \
-                credential.credentialStore secretservice
-            ;;
-
-        wsl)
-            git config --file "$HOME/.gitconfig.local" \
-                credential.credentialStore cache
-            ;;
-
-        mac)
-            git config --file "$HOME/.gitconfig.local" \
-                --unset-all credential.credentialStore 2>/dev/null || :
-            return 0
-            ;;
-
-        *)
-            return 1
-            ;;
+default_git_credential_store() {
+    case "$GIT_CREDENTIAL_MANAGER_BACKEND:$OS" in
+        native:linux) printf 'secretservice\n' ;;
+        native:wsl) printf 'cache\n' ;;
+        native:mac|windows:windows|windows:wsl) ;;
+        *) return 1 ;;
     esac
+}
+
+configure_git_credential_store() {
+    local credential_store="$ARG_GCM_CREDENTIAL_STORE"
+
+    if [[ "$credential_store" == "default" ]]; then
+        credential_store="$(default_git_credential_store)" || return 1
+    fi
+
+    if [[ -z "$credential_store" ]]; then
+        git config --file "$HOME/.gitconfig.local" \
+            --unset-all credential.credentialStore 2>/dev/null || :
+        return 0
+    fi
+
+    git config --file "$HOME/.gitconfig.local" --replace-all \
+        credential.credentialStore "$credential_store"
 }
 
 escape_git_credential_helper_path() {
@@ -217,18 +231,5 @@ configure_git_credential_manager_settings() {
                 credential.helper "$credential_manager_helper" || return 1
     fi
 
-    case "$GIT_CREDENTIAL_MANAGER_BACKEND" in
-        windows)
-            git config --file "$HOME/.gitconfig.local" \
-                --unset-all credential.credentialStore 2>/dev/null || :
-            ;;
-
-        native)
-            configure_native_git_credential_store
-            ;;
-
-        *)
-            return 1
-            ;;
-    esac
+    configure_git_credential_store
 }

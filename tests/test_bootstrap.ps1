@@ -2,10 +2,12 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $TestRoot = Split-Path $PSScriptRoot -Parent
-$BootstrapContent = Get-Content -Raw -LiteralPath `
-    (Join-Path $TestRoot 'bootstrap.ps1')
-$BootstrapDefinitions = $BootstrapContent -replace `
-    '(?s)\r?\ntry \{\r?\n    Invoke-Bootstrap\r?\n\}\r?\ncatch \{.*$', ''
+. (Join-Path $PSScriptRoot 'lib\test_helpers.ps1')
+
+$BootstrapDefinitions = Get-TestScriptDefinitions `
+    -Path (Join-Path $TestRoot 'bootstrap.ps1') `
+    -EntryPointPattern `
+        '(?s)\r?\ntry \{\r?\n    Invoke-Bootstrap\r?\n\}\r?\ncatch \{.*$'
 Invoke-Expression $BootstrapDefinitions
 
 $TestsPassed = 0
@@ -38,66 +40,6 @@ function Invoke-Test {
     }
 }
 
-function New-TestDirectory {
-    $directory = Join-Path ([IO.Path]::GetTempPath()) `
-        ("dotfiles-bootstrap-test.{0}" -f [guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Path $directory | Out-Null
-    return $directory
-}
-
-function Remove-TestDirectory {
-    param([string] $Path)
-
-    $resolvedPath = [IO.Path]::GetFullPath($Path).TrimEnd('\')
-    $temporaryRoot = [IO.Path]::GetFullPath(
-        [IO.Path]::GetTempPath()
-    ).TrimEnd('\')
-    $parent = [IO.Path]::GetDirectoryName($resolvedPath).TrimEnd('\')
-    $leaf = [IO.Path]::GetFileName($resolvedPath)
-
-    if (-not [StringComparer]::OrdinalIgnoreCase.Equals($parent, $temporaryRoot) -or
-        -not $leaf.StartsWith('dotfiles-bootstrap-test.')) {
-        throw "Refusing to remove unexpected test path: $resolvedPath"
-    }
-
-    if (Test-Path -LiteralPath $resolvedPath) {
-        Remove-Item -LiteralPath $resolvedPath -Recurse -Force
-    }
-}
-
-function Invoke-TestGit {
-    param([string[]] $Arguments)
-
-    $previousErrorAction = $ErrorActionPreference
-    try {
-        $ErrorActionPreference = 'Continue'
-        & $script:GitPath -c core.hooksPath=/dev/null `
-            -c core.excludesFile=/dev/null @Arguments *> $null
-        $gitExitCode = $LASTEXITCODE
-    }
-    finally {
-        $ErrorActionPreference = $previousErrorAction
-    }
-    if ($gitExitCode -ne 0) {
-        throw "Git test fixture command failed: $($Arguments -join ' ')"
-    }
-}
-
-function New-TestRepository {
-    param(
-        [string] $Path,
-        [string] $InstallerBody = 'exit 0'
-    )
-
-    New-Item -ItemType Directory -Path $Path -Force | Out-Null
-    Invoke-TestGit -Arguments @('-C', $Path, 'init', '--quiet')
-    [IO.File]::WriteAllText(
-        (Join-Path $Path 'install.sh'),
-        "#!/usr/bin/env bash`n$InstallerBody`n",
-        [Text.UTF8Encoding]::new($false)
-    )
-}
-
 Invoke-Test -Name 'PowerShell status output matches installer format' -Test {
     $output = & {
         Write-Status -Level 'INFO' -Component 'Bootstrap' `
@@ -120,14 +62,27 @@ Invoke-Test -Name 'existing repository succeeds and arguments stay literal' -Tes
         $script:DotfilesPath = Join-Path $temporaryRoot `
             'home with spaces\.dotfiles'
         $marker = Join-Path $temporaryRoot 'should-not-run'
-        New-TestRepository -Path $script:DotfilesPath -InstallerBody `
-            'printf "installer argument: <%s>\n" "$1"'
-        $script:InstallArguments = @("literal;touch $marker")
+        New-TestRepository -GitPath $script:GitPath `
+            -Path $script:DotfilesPath -InstallerBody `
+            'printf "installer argument: <%s>\n" "$@"'
+        $script:InstallArguments = @(
+            '--minimal'
+            '--include=nvim,dotnet'
+            "literal;touch $marker"
+        )
 
         $output = & { Invoke-Bootstrap } 6>&1 | Out-String
         return $output.Contains('[OK] Git:') -and
             $output.Contains('[OK] Dotfiles:') -and
-            $output.Contains("installer argument: <literal;touch $marker>") -and
+            $output.Contains(
+                'installer argument: <--minimal>'
+            ) -and
+            $output.Contains(
+                'installer argument: <--include=nvim,dotnet>'
+            ) -and
+            $output.Contains(
+                "installer argument: <literal;touch $marker>"
+            ) -and
             $output.Contains('[OK] Bootstrap: Installation completed.') -and
             -not (Test-Path -LiteralPath $marker)
     }
@@ -140,7 +95,8 @@ Invoke-Test -Name 'Git for Windows installation hands off to the installer' -Tes
     $temporaryRoot = New-TestDirectory
     try {
         $script:DotfilesPath = Join-Path $temporaryRoot '.dotfiles'
-        New-TestRepository -Path $script:DotfilesPath
+        New-TestRepository -GitPath $script:GitPath `
+            -Path $script:DotfilesPath
         $script:InstallArguments = @()
         $script:GitWasInstalled = $false
 
@@ -164,8 +120,9 @@ Invoke-Test -Name 'existing repository remotes are not bootstrap policy' -Test {
     $temporaryRoot = New-TestDirectory
     try {
         $script:DotfilesPath = Join-Path $temporaryRoot '.dotfiles'
-        New-TestRepository -Path $script:DotfilesPath
-        Invoke-TestGit -Arguments @(
+        New-TestRepository -GitPath $script:GitPath `
+            -Path $script:DotfilesPath
+        Invoke-TestGit -GitPath $script:GitPath -Arguments @(
             '-C', $script:DotfilesPath, 'remote', 'add', 'origin',
             'https://example.com/personal-fork/dotfiles.git'
         )
@@ -181,7 +138,8 @@ Invoke-Test -Name 'nested repository is rejected' -Test {
     $temporaryRoot = New-TestDirectory
     try {
         $script:DotfilesPath = Join-Path $temporaryRoot '.dotfiles'
-        Invoke-TestGit -Arguments @('-C', $temporaryRoot, 'init', '--quiet')
+        Invoke-TestGit -GitPath $script:GitPath `
+            -Arguments @('-C', $temporaryRoot, 'init', '--quiet')
         New-Item -ItemType Directory -Path $script:DotfilesPath | Out-Null
 
         try {
@@ -201,7 +159,8 @@ Invoke-Test -Name 'installer failure is reported with its exit code' -Test {
     $temporaryRoot = New-TestDirectory
     try {
         $script:DotfilesPath = Join-Path $temporaryRoot '.dotfiles'
-        New-TestRepository -Path $script:DotfilesPath -InstallerBody 'exit 23'
+        New-TestRepository -GitPath $script:GitPath `
+            -Path $script:DotfilesPath -InstallerBody 'exit 23'
         $script:InstallArguments = @()
 
         try {
@@ -241,7 +200,8 @@ Invoke-Test -Name 'missing installer is rejected' -Test {
     $temporaryRoot = New-TestDirectory
     try {
         $script:DotfilesPath = Join-Path $temporaryRoot '.dotfiles'
-        New-TestRepository -Path $script:DotfilesPath
+        New-TestRepository -GitPath $script:GitPath `
+            -Path $script:DotfilesPath
         Remove-Item -LiteralPath (Join-Path $script:DotfilesPath 'install.sh')
         $script:InstallArguments = @()
 
@@ -282,15 +242,17 @@ Invoke-Test -Name 'clone succeeds and restores Git environment' -Test {
         $source = Join-Path $temporaryRoot 'source'
         $remote = Join-Path $temporaryRoot 'remote.git'
         $script:DotfilesPath = Join-Path $temporaryRoot 'clone with spaces'
-        New-TestRepository -Path $source
-        Invoke-TestGit -Arguments @('-C', $source, 'add', 'install.sh')
-        Invoke-TestGit -Arguments @(
+        New-TestRepository -GitPath $script:GitPath -Path $source
+        Invoke-TestGit -GitPath $script:GitPath `
+            -Arguments @('-C', $source, 'add', 'install.sh')
+        Invoke-TestGit -GitPath $script:GitPath -Arguments @(
             '-C', $source,
             '-c', 'user.name=Bootstrap-Test',
             '-c', 'user.email=bootstrap@example.invalid',
             'commit', '--quiet', '-m', 'initial'
         )
-        Invoke-TestGit -Arguments @('clone', '--quiet', '--bare', $source, $remote)
+        Invoke-TestGit -GitPath $script:GitPath `
+            -Arguments @('clone', '--quiet', '--bare', $source, $remote)
 
         $env:GIT_TERMINAL_PROMPT = 'original'
         $env:GIT_SSL_NO_VERIFY = 'true'
@@ -335,9 +297,8 @@ Invoke-Test -Name 'clone failure is reported' -Test {
     }
 }
 
-Write-Host ''
-Write-Host ("[SUMMARY] Bootstrap PowerShell tests: {0}/{1} succeeded" -f `
-        $TestsPassed, ($TestsPassed + $TestsFailed))
+Write-TestSummary -Name 'Bootstrap PowerShell tests' `
+    -Passed $TestsPassed -Failed $TestsFailed
 
 if ($TestsFailed -ne 0) {
     exit 1
