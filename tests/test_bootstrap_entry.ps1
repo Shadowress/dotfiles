@@ -23,12 +23,41 @@ $ProbeRoot = New-TestDirectory -Prefix 'dotfiles-bootstrap-entry'
 $OldUserProfile = $env:USERPROFILE
 
 try {
+    $source = Join-Path $ProbeRoot 'source'
+    $remote = Join-Path $ProbeRoot 'remote.git'
     $repository = Join-Path $ProbeRoot '.dotfiles'
-    New-TestRepository -GitPath $git -Path $repository -InstallerBody `
-        'printf ''[OK] Fixture: installer received <%s>\n'' "$@"'
+    New-TestRepository -GitPath $git -Path $source -InstallerBody 'exit 91'
     Invoke-TestGit -GitPath $git -Arguments @(
-        '-C', $repository, 'remote', 'add', 'origin',
-        'https://github.com/Shadowress/dotfiles.git'
+        '-C', $source, 'add', 'install.sh'
+    )
+    Invoke-TestGit -GitPath $git -Arguments @(
+        '-C', $source,
+        '-c', 'user.name=Bootstrap-Test',
+        '-c', 'user.email=bootstrap@example.invalid',
+        'commit', '--quiet', '-m', 'initial'
+    )
+    Invoke-TestGit -GitPath $git -Arguments @(
+        'clone', '--quiet', '--bare', $source, $remote
+    )
+    Invoke-TestGit -GitPath $git -Arguments @(
+        'clone', '--quiet', $remote, $repository
+    )
+    [IO.File]::WriteAllText(
+        (Join-Path $source 'install.sh'),
+        "#!/usr/bin/env bash`nprintf '[OK] Fixture: installer received <%s>\n' `"`$@`"`n",
+        [Text.UTF8Encoding]::new($false)
+    )
+    Invoke-TestGit -GitPath $git -Arguments @(
+        '-C', $source, 'add', 'install.sh'
+    )
+    Invoke-TestGit -GitPath $git -Arguments @(
+        '-C', $source,
+        '-c', 'user.name=Bootstrap-Test',
+        '-c', 'user.email=bootstrap@example.invalid',
+        'commit', '--quiet', '-m', 'update'
+    )
+    Invoke-TestGit -GitPath $git -Arguments @(
+        '-C', $source, 'push', '--quiet', $remote, 'HEAD'
     )
 
     $env:USERPROFILE = $ProbeRoot

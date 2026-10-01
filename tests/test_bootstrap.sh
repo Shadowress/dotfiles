@@ -87,13 +87,29 @@ test_mac_requests_command_line_tools() (
 
 test_existing_repository_and_arguments() (
     local output
+    local remote
+    local source
     local temporary_home
 
     temporary_home="$(make_test_directory dotfiles-bootstrap-test)" || return 1
     trap 'remove_test_directory "$temporary_home" dotfiles-bootstrap-test' EXIT
     HOME="$temporary_home"
-    create_test_repository "$HOME/.dotfiles" \
-        'printf "installer argument: <%s>\n" "$@"' || return 1
+    source="$temporary_home/source"
+    remote="$temporary_home/remote.git"
+    create_test_repository "$source" 'exit 91' || return 1
+    git -C "$source" add install.sh || return 1
+    git -C "$source" -c user.name=Bootstrap-Test \
+        -c user.email=bootstrap@example.invalid \
+        commit --quiet -m initial || return 1
+    git clone --quiet --bare "$source" "$remote" || return 1
+    git clone --quiet "$remote" "$HOME/.dotfiles" || return 1
+    printf '#!/usr/bin/env bash\nprintf "installer argument: <%%s>\\n" "$@"\n' \
+        > "$source/install.sh"
+    git -C "$source" add install.sh || return 1
+    git -C "$source" -c user.name=Bootstrap-Test \
+        -c user.email=bootstrap@example.invalid \
+        commit --quiet -m update || return 1
+    git -C "$source" push --quiet "$remote" HEAD || return 1
     load_bootstrap
     uname() { printf 'Linux\n'; }
     find_usable_git() {
@@ -114,6 +130,25 @@ test_existing_repository_and_arguments() (
         [[ ! -e "$temporary_home/should-not-run" ]]
 )
 
+test_repository_update_failure_is_reported() (
+    local temporary_home
+
+    temporary_home="$(make_test_directory dotfiles-bootstrap-test)" || return 1
+    trap 'remove_test_directory "$temporary_home" dotfiles-bootstrap-test' EXIT
+    HOME="$temporary_home"
+    create_test_repository "$HOME/.dotfiles" || return 1
+    load_bootstrap
+    uname() { printf 'Linux\n'; }
+    find_usable_git() {
+        GIT_EXECUTABLE="$(type -P git)"
+        return 0
+    }
+
+    capture_command main
+    [[ $CAPTURED_STATUS -ne 0 && \
+        "$CAPTURED_OUTPUT" == *'repository update failed'* ]]
+)
+
 test_git_install_then_handoff() (
     local installed_marker
     local output
@@ -124,6 +159,7 @@ test_git_install_then_handoff() (
     HOME="$temporary_home"
     create_test_repository "$HOME/.dotfiles" || return 1
     load_bootstrap
+    update_repository() { :; }
     installed_marker="$temporary_home/git-installed"
     uname() { printf 'Linux\n'; }
     find_usable_git() {
@@ -174,6 +210,7 @@ test_installer_failure_is_reported() (
     HOME="$temporary_home"
     create_test_repository "$HOME/.dotfiles" 'exit 23' || return 1
     load_bootstrap
+    update_repository() { :; }
     uname() { printf 'Linux\n'; }
     find_usable_git() {
         GIT_EXECUTABLE="$(type -P git)"
@@ -192,6 +229,7 @@ test_existing_file_is_rejected() (
     HOME="$temporary_home"
     printf 'not a repository\n' > "$HOME/.dotfiles"
     load_bootstrap
+    update_repository() { :; }
     uname() { printf 'Linux\n'; }
     find_usable_git() {
         GIT_EXECUTABLE="$(type -P git)"
@@ -211,6 +249,7 @@ test_missing_installer_is_rejected() (
     create_test_repository "$HOME/.dotfiles" || return 1
     rm "$HOME/.dotfiles/install.sh"
     load_bootstrap
+    update_repository() { :; }
     uname() { printf 'Linux\n'; }
     find_usable_git() {
         GIT_EXECUTABLE="$(type -P git)"
@@ -283,6 +322,8 @@ run_test 'Linux package-manager commands are correct' test_linux_package_manager
 run_test 'macOS requests Xcode Command Line Tools' test_mac_requests_command_line_tools
 run_test 'existing repository succeeds and arguments stay literal' \
     test_existing_repository_and_arguments
+run_test 'repository update failure is reported' \
+    test_repository_update_failure_is_reported
 run_test 'Git installation hands off to the installer' test_git_install_then_handoff
 run_test 'existing repository remotes are not bootstrap policy' \
     test_existing_remote_is_not_policy

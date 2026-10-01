@@ -185,6 +185,39 @@ function Invoke-Clone {
         -Message "Cloned into $DotfilesPath."
 }
 
+function Invoke-RepositoryUpdate {
+    param([string] $GitPath)
+
+    Write-Status -Level 'INFO' -Component 'Dotfiles' `
+        -Message 'Updating the existing repository.'
+
+    $previousPrompt = $env:GIT_TERMINAL_PROMPT
+    $previousSslOverride = $env:GIT_SSL_NO_VERIFY
+    $previousErrorAction = $ErrorActionPreference
+    try {
+        $env:GIT_TERMINAL_PROMPT = '0'
+        $env:GIT_SSL_NO_VERIFY = 'false'
+        $ErrorActionPreference = 'Continue'
+        $gitOutput = & $GitPath -c http.sslVerify=true -C $DotfilesPath `
+            pull --quiet 2>&1
+        $gitExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorAction
+        $env:GIT_TERMINAL_PROMPT = $previousPrompt
+        $env:GIT_SSL_NO_VERIFY = $previousSslOverride
+    }
+
+    if ($gitExitCode -ne 0) {
+        $details = [string]::Join("`n", [string[]] $gitOutput)
+        Stop-Bootstrap -Component 'Dotfiles' `
+            -Message "The repository update failed.`n$details"
+    }
+
+    Write-Status -Level 'OK' -Component 'Dotfiles' `
+        -Message "Updated the repository at $DotfilesPath."
+}
+
 function Invoke-Bootstrap {
     $git = Find-Git
     $bash = if ($git) { Find-Bash -GitPath $git } else { $null }
@@ -209,6 +242,7 @@ function Invoke-Bootstrap {
 
     if (Test-Path -LiteralPath $DotfilesPath) {
         Get-ValidatedRepository -GitPath $git
+        Invoke-RepositoryUpdate -GitPath $git
     }
     else {
         Invoke-Clone -GitPath $git

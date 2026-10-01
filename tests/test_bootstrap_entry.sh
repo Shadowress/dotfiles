@@ -8,12 +8,30 @@ source "$TEST_ROOT/tests/lib/test_helpers.sh"
 PROBE_DIRECTORY="$(make_test_directory dotfiles-bootstrap-entry)"
 trap 'remove_test_directory "$PROBE_DIRECTORY" dotfiles-bootstrap-entry' EXIT
 
+source_repository="$PROBE_DIRECTORY/source"
+remote_repository="$PROBE_DIRECTORY/remote.git"
 repository="$PROBE_DIRECTORY/.dotfiles"
-create_test_repository "$repository" \
+create_test_repository "$source_repository" 'exit 91'
+GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+    git -C "$source_repository" add install.sh
+GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+    git -C "$source_repository" -c user.name=Bootstrap-Test \
+        -c user.email=bootstrap@example.invalid \
+        commit --quiet -m initial
+GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+    git clone --quiet --bare "$source_repository" "$remote_repository"
+GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+    git clone --quiet "$remote_repository" "$repository"
+create_test_repository "$source_repository" \
     'printf '\''[OK] Fixture: installer received <%s>\n'\'' "$@"'
 GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
-    git -C "$repository" remote add origin \
-    https://github.com/Shadowress/dotfiles.git
+    git -C "$source_repository" add install.sh
+GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+    git -C "$source_repository" -c user.name=Bootstrap-Test \
+        -c user.email=bootstrap@example.invalid \
+        commit --quiet -m update
+GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+    git -C "$source_repository" push --quiet "$remote_repository" HEAD
 
 output="$(
     HOME="$PROBE_DIRECTORY" bash "$TEST_ROOT/bootstrap.sh" \

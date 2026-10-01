@@ -140,6 +140,17 @@ clone_repository() {
     print_status "OK" "Dotfiles" "Cloned into $DOTFILES."
 }
 
+update_repository() {
+    print_status "INFO" "Dotfiles" "Updating the existing repository."
+
+    GIT_SSL_NO_VERIFY=false GIT_TERMINAL_PROMPT=0 \
+        "$GIT_EXECUTABLE" -c http.sslVerify=true -C "$DOTFILES" \
+        pull --quiet ||
+        fail "Dotfiles" "The repository update failed."
+
+    print_status "OK" "Dotfiles" "Updated the repository at $DOTFILES."
+}
+
 main() {
     local installer_exit_code
     local -a install_arguments=("$@")
@@ -160,6 +171,7 @@ main() {
 
     if [[ -e "$DOTFILES" || -L "$DOTFILES" ]]; then
         validate_existing_repository
+        update_repository
     else
         clone_repository
         validate_existing_repository

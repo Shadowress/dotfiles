@@ -61,10 +61,43 @@ Invoke-Test -Name 'existing repository succeeds and arguments stay literal' -Tes
     try {
         $script:DotfilesPath = Join-Path $temporaryRoot `
             'home with spaces\.dotfiles'
+        $source = Join-Path $temporaryRoot 'source'
+        $remote = Join-Path $temporaryRoot 'remote.git'
         $marker = Join-Path $temporaryRoot 'should-not-run'
-        New-TestRepository -GitPath $script:GitPath `
-            -Path $script:DotfilesPath -InstallerBody `
-            'printf "installer argument: <%s>\n" "$@"'
+        New-TestRepository -GitPath $script:GitPath -Path $source `
+            -InstallerBody 'exit 91'
+        Invoke-TestGit -GitPath $script:GitPath -Arguments @(
+            '-C', $source, 'add', 'install.sh'
+        )
+        Invoke-TestGit -GitPath $script:GitPath -Arguments @(
+            '-C', $source,
+            '-c', 'user.name=Bootstrap-Test',
+            '-c', 'user.email=bootstrap@example.invalid',
+            'commit', '--quiet', '-m', 'initial'
+        )
+        Invoke-TestGit -GitPath $script:GitPath -Arguments @(
+            'clone', '--quiet', '--bare', $source, $remote
+        )
+        Invoke-TestGit -GitPath $script:GitPath -Arguments @(
+            'clone', '--quiet', $remote, $script:DotfilesPath
+        )
+        [IO.File]::WriteAllText(
+            (Join-Path $source 'install.sh'),
+            "#!/usr/bin/env bash`nprintf `"installer argument: <%s>\n`" `"`$@`"`n",
+            [Text.UTF8Encoding]::new($false)
+        )
+        Invoke-TestGit -GitPath $script:GitPath -Arguments @(
+            '-C', $source, 'add', 'install.sh'
+        )
+        Invoke-TestGit -GitPath $script:GitPath -Arguments @(
+            '-C', $source,
+            '-c', 'user.name=Bootstrap-Test',
+            '-c', 'user.email=bootstrap@example.invalid',
+            'commit', '--quiet', '-m', 'update'
+        )
+        Invoke-TestGit -GitPath $script:GitPath -Arguments @(
+            '-C', $source, 'push', '--quiet', $remote, 'HEAD'
+        )
         $script:InstallArguments = @(
             '--minimal'
             '--include=first,second'
@@ -91,6 +124,27 @@ Invoke-Test -Name 'existing repository succeeds and arguments stay literal' -Tes
     }
 }
 
+Invoke-Test -Name 'repository update failure is reported' -Test {
+    $temporaryRoot = New-TestDirectory
+    try {
+        $script:DotfilesPath = Join-Path $temporaryRoot '.dotfiles'
+        New-TestRepository -GitPath $script:GitPath `
+            -Path $script:DotfilesPath
+        $script:InstallArguments = @()
+
+        try {
+            Invoke-Bootstrap
+            return $false
+        }
+        catch {
+            return $_.Exception.Message.Contains('repository update failed')
+        }
+    }
+    finally {
+        Remove-TestDirectory -Path $temporaryRoot
+    }
+}
+
 Invoke-Test -Name 'Git for Windows installation hands off to the installer' -Test {
     $temporaryRoot = New-TestDirectory
     try {
@@ -106,6 +160,7 @@ Invoke-Test -Name 'Git for Windows installation hands off to the installer' -Tes
         }
         function Find-Bash { return $script:BashPath }
         function Install-GitForWindows { $script:GitWasInstalled = $true }
+        function Invoke-RepositoryUpdate { }
 
         $output = & { Invoke-Bootstrap } 6>&1 | Out-String
         return $script:GitWasInstalled -and
@@ -162,6 +217,7 @@ Invoke-Test -Name 'installer failure is reported with its exit code' -Test {
         New-TestRepository -GitPath $script:GitPath `
             -Path $script:DotfilesPath -InstallerBody 'exit 23'
         $script:InstallArguments = @()
+        function Invoke-RepositoryUpdate { }
 
         try {
             Invoke-Bootstrap
@@ -204,6 +260,7 @@ Invoke-Test -Name 'missing installer is rejected' -Test {
             -Path $script:DotfilesPath
         Remove-Item -LiteralPath (Join-Path $script:DotfilesPath 'install.sh')
         $script:InstallArguments = @()
+        function Invoke-RepositoryUpdate { }
 
         try {
             Invoke-Bootstrap
