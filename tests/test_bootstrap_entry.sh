@@ -17,21 +17,21 @@ GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
 
 output="$(
     HOME="$PROBE_DIRECTORY" bash "$TEST_ROOT/bootstrap.sh" \
-        '--minimal' '--include=nvim,dotnet'
+        '--minimal' '--include=first,second'
 )"
 
 [[ "$output" == *'[OK] Fixture: installer received <--minimal>'* ]]
-[[ "$output" == *'[OK] Fixture: installer received <--include=nvim,dotnet>'* ]]
+[[ "$output" == *'[OK] Fixture: installer received <--include=first,second>'* ]]
 [[ "$output" == *'[OK] Bootstrap: Installation completed.'* ]]
 
 remote_output="$(
     HOME="$PROBE_DIRECTORY" bash -c "$(< "$TEST_ROOT/bootstrap.sh")" -- \
-        '--minimal' '--include=nvim'
+        '--minimal' '--include=first'
 )"
 [[ "$remote_output" == \
     *'[OK] Fixture: installer received <--minimal>'* ]]
 [[ "$remote_output" == \
-    *'[OK] Fixture: installer received <--include=nvim>'* ]]
+    *'[OK] Fixture: installer received <--include=first>'* ]]
 
 mv "$repository" "$PROBE_DIRECTORY/valid-repository"
 printf 'not a repository\n' > "$repository"

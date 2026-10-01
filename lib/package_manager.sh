@@ -1,5 +1,5 @@
 prepare_package_manager() {
-    case "$OS" in
+    case "$PLATFORM" in
         linux|wsl)
             case "$DISTRO" in
                 ubuntu|debian)

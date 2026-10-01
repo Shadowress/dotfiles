@@ -34,7 +34,7 @@ try {
     $env:USERPROFILE = $ProbeRoot
     $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass `
         -File (Join-Path $TestRoot 'bootstrap.ps1') `
-        '--minimal' '--include=nvim,dotnet' 2>&1 | Out-String
+        '--minimal' '--include=first,second' 2>&1 | Out-String
     $exitCode = $LASTEXITCODE
 
     if ($exitCode -ne 0) {
@@ -43,7 +43,7 @@ try {
     if (-not $output.Contains(
             '[OK] Fixture: installer received <--minimal>'
         ) -or -not $output.Contains(
-            '[OK] Fixture: installer received <--include=nvim,dotnet>'
+            '[OK] Fixture: installer received <--include=first,second>'
         )) {
         throw "The installer argument was not preserved literally.`n$output"
     }

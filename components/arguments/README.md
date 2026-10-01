@@ -14,7 +14,7 @@ validate_example_mode_argument() {
     local value="$1"
     local provided="$2"
 
-    if [[ "$provided" == "true" && "$OS" == "windows" ]]; then
+    if [[ "$provided" == "true" && "$PLATFORM" == "windows" ]]; then
         ARGUMENT_VALIDATION_ERROR="--example-mode is not supported on Windows."
         return 1
     fi

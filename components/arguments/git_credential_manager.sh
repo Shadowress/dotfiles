@@ -2,7 +2,7 @@ validate_wsl_gcm_argument() {
     local value="$1"
     local provided="$2"
 
-    if [[ "$provided" == "true" && "$OS" != "wsl" ]]; then
+    if [[ "$provided" == "true" && "$PLATFORM" != "wsl" ]]; then
         ARGUMENT_VALIDATION_ERROR="--wsl-gcm is only valid when running in WSL."
         return 1
     fi
@@ -18,7 +18,7 @@ validate_gcm_credential_store_argument() {
         return 1
     }
 
-    case "$GIT_CREDENTIAL_MANAGER_BACKEND:$OS:$value" in
+    case "$GIT_CREDENTIAL_MANAGER_BACKEND:$PLATFORM:$value" in
         windows:*:wincredman|windows:*:dpapi|windows:*:cache|\
         windows:*:plaintext|windows:*:none|\
         native:mac:keychain|native:mac:gpg|native:mac:cache|\
@@ -31,7 +31,7 @@ validate_gcm_credential_store_argument() {
             ;;
     esac
 
-    ARGUMENT_VALIDATION_ERROR="Credential store '$value' is not supported by the $GIT_CREDENTIAL_MANAGER_BACKEND GCM backend on $OS."
+    ARGUMENT_VALIDATION_ERROR="Credential store '$value' is not supported by the $GIT_CREDENTIAL_MANAGER_BACKEND GCM backend on the $PLATFORM platform."
     return 1
 }
 

@@ -8,7 +8,7 @@ setup_git() {
 install_git() {
     ! is_command_in_path "git" || return 0
 
-    case "$OS" in
+    case "$PLATFORM" in
         linux|wsl)
             case "$DISTRO" in
                 ubuntu|debian)
@@ -57,7 +57,7 @@ install_git() {
 configure_git_environment() {
     local git_executable
 
-    case "$OS" in
+    case "$PLATFORM" in
         linux|wsl)
             git_executable="$(find_executable \
                 "/usr/local/bin/git" \
@@ -103,9 +103,9 @@ configure_git_environment() {
 }
 
 configure_git_settings() {
-    local shared_config="$DOTFILES/common/git/.gitconfig"
+    local shared_config="$DOTFILES/config/git/.gitconfig"
 
-    if [[ "$OS" == "windows" ]]; then
+    if [[ "$PLATFORM" == "windows" ]]; then
         shared_config="$(cygpath -m "$shared_config")" || return 1
 
         touch "$HOME/.gitconfig" "$HOME/.gitconfig.local" || return 1
@@ -117,7 +117,7 @@ configure_git_settings() {
         return
     fi
 
-    touch "$DOTFILES/common/git/.gitconfig.local" &&
+    touch "$DOTFILES/config/git/.gitconfig.local" &&
         link_path "$shared_config" "$HOME/.gitconfig" &&
-        link_path "$DOTFILES/common/git/.gitconfig.local" "$HOME/.gitconfig.local"
+        link_path "$DOTFILES/config/git/.gitconfig.local" "$HOME/.gitconfig.local"
 }

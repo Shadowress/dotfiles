@@ -7,12 +7,8 @@ setup_git_credential_manager() {
 
 GIT_CREDENTIAL_MANAGER_BACKEND=""
 
-is_git_credential_manager_usable() {
-    "$1" --version &>/dev/null
-}
-
 find_windows_git_credential_manager_executable() {
-    find_executable --filter is_git_credential_manager_usable \
+    find_executable --filter is_executable_usable \
         "/ucrt64/bin/git-credential-manager.exe" \
         "/mingw64/bin/git-credential-manager.exe" \
         "/clangarm64/bin/git-credential-manager.exe" \
@@ -25,17 +21,17 @@ find_windows_git_credential_manager_executable() {
 }
 
 find_native_git_credential_manager_executable() {
-    case "$OS" in
+    case "$PLATFORM" in
         linux|wsl)
             find_executable \
-                --filter is_git_credential_manager_usable \
+                --filter is_executable_usable \
                 "$HOME/.dotnet/tools/git-credential-manager" \
                 "/usr/local/bin/git-credential-manager" \
                 "/usr/bin/git-credential-manager"
             ;;
 
         mac)
-            find_executable --filter is_git_credential_manager_usable \
+            find_executable --filter is_executable_usable \
                 "/opt/homebrew/bin/git-credential-manager" \
                 "/usr/local/bin/git-credential-manager" \
                 "/opt/homebrew/share/gcm-core/git-credential-manager" \
@@ -49,7 +45,7 @@ find_native_git_credential_manager_executable() {
 }
 
 select_git_credential_manager_backend() {
-    case "$OS" in
+    case "$PLATFORM" in
         windows)
             GIT_CREDENTIAL_MANAGER_BACKEND="windows"
             ;;
@@ -107,7 +103,7 @@ install_git_credential_manager() {
 
     case "$GIT_CREDENTIAL_MANAGER_BACKEND" in
         windows)
-            if [[ "$OS" == "wsl" ]]; then
+            if [[ "$PLATFORM" == "wsl" ]]; then
                 printf 'Windows Git Credential Manager was not found.\n'
             else
                 printf 'Git Credential Manager was not found in the Git for Windows installation.\n'
@@ -116,7 +112,7 @@ install_git_credential_manager() {
             ;;
 
         native)
-            case "$OS" in
+            case "$PLATFORM" in
                 linux|wsl)
                     is_command_in_path "dotnet" || {
                         printf '.NET SDK is required to install Git Credential Manager.\n'
@@ -156,20 +152,21 @@ configure_git_credential_manager_environment() {
         return 1
     }
 
-    if [[ "$OS" == "wsl" && "$GIT_CREDENTIAL_MANAGER_BACKEND" == "windows" ]]; then
+    if [[ "$PLATFORM" == "wsl" && \
+        "$GIT_CREDENTIAL_MANAGER_BACKEND" == "windows" ]]; then
         return 0
     fi
 
     prepend_to_path "${credential_manager_executable%/*}" || return 1
 
-    is_git_credential_manager_usable "$credential_manager_executable" || {
+    is_executable_usable "$credential_manager_executable" || {
         printf 'Git Credential Manager was found, but it could not be used.\n'
         return 1
     }
 }
 
 default_git_credential_store() {
-    case "$GIT_CREDENTIAL_MANAGER_BACKEND:$OS" in
+    case "$GIT_CREDENTIAL_MANAGER_BACKEND:$PLATFORM" in
         native:linux) printf 'secretservice\n' ;;
         native:wsl) printf 'cache\n' ;;
         native:mac|windows:windows|windows:wsl) ;;
@@ -218,7 +215,7 @@ configure_git_credential_manager_settings() {
         escape_git_credential_helper_path "$credential_manager_executable"
     )" || return 1
 
-    if [[ "$OS" == "windows" ]]; then
+    if [[ "$PLATFORM" == "windows" ]]; then
         git config --file "$HOME/.gitconfig.local" \
             --replace-all credential.helper "" &&
             MSYS2_ARG_CONV_EXCL="$credential_manager_helper" \

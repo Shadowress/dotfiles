@@ -67,7 +67,7 @@ Invoke-Test -Name 'existing repository succeeds and arguments stay literal' -Tes
             'printf "installer argument: <%s>\n" "$@"'
         $script:InstallArguments = @(
             '--minimal'
-            '--include=nvim,dotnet'
+            '--include=first,second'
             "literal;touch $marker"
         )
 
@@ -78,7 +78,7 @@ Invoke-Test -Name 'existing repository succeeds and arguments stay literal' -Tes
                 'installer argument: <--minimal>'
             ) -and
             $output.Contains(
-                'installer argument: <--include=nvim,dotnet>'
+                'installer argument: <--include=first,second>'
             ) -and
             $output.Contains(
                 "installer argument: <literal;touch $marker>"

@@ -1,28 +1,29 @@
 WINDOWS_PROGRAM_FILES=""
 WINDOWS_LOCAL_APP_DATA=""
 WINDOWS_USER_PROFILE=""
+PLATFORM=""
 
-detect_os() {
+detect_platform() {
     local kernel
     kernel="$(uname -s)"
 
     case "$kernel" in
         Linux*)
             if grep -qi microsoft /proc/version; then
-                OS="wsl"
+                PLATFORM="wsl"
             else
-                OS="linux"
+                PLATFORM="linux"
             fi
 
             detect_linux_distribution || return 1
             ;;
 
         CYGWIN*|MINGW*|MSYS*)
-            OS="windows"
+            PLATFORM="windows"
             ;;
 
         Darwin*)
-            OS="mac"
+            PLATFORM="mac"
             ;;
 
         *)
@@ -31,7 +32,7 @@ detect_os() {
             ;;
     esac
 
-    case "$OS" in
+    case "$PLATFORM" in
         windows|wsl)
             detect_windows_directories || return 1
             ;;
@@ -41,7 +42,7 @@ detect_os() {
 detect_windows_directories() {
     local windows_path
 
-    case "$OS" in
+    case "$PLATFORM" in
         windows)
             WINDOWS_PROGRAM_FILES="/c/Program Files"
             WINDOWS_LOCAL_APP_DATA="$HOME/AppData/Local"

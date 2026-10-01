@@ -16,6 +16,7 @@ register_component "gcm" "Git Credential Manager" \
     "setup_git_credential_manager" "all"
 register_component "homebrew" "Homebrew" "setup_homebrew" "mac"
 register_component "nvim" "Neovim" "setup_nvim" "all"
+register_component "pyenv" "Python Version Manager" "setup_pyenv" "all"
 
 MINIMAL_COMPONENTS=(
     "git"
@@ -73,17 +74,18 @@ component_platforms_text() {
     done
 }
 
-component_is_available_on_os() {
+component_is_available_on_platform() {
     local component="$1"
-    local os="$2"
-    local platform
+    local current_platform="$2"
+    local available_platform
     local platforms
     local -a platform_list
 
     platforms="$(component_platforms "$component")" || return 1
     IFS='|' read -r -a platform_list <<< "$platforms"
-    for platform in "${platform_list[@]}"; do
-        [[ "$platform" != "all" && "$platform" != "$os" ]] || return 0
+    for available_platform in "${platform_list[@]}"; do
+        [[ "$available_platform" != "all" && \
+            "$available_platform" != "$current_platform" ]] || return 0
     done
 
     return 1
@@ -267,7 +269,7 @@ resolve_component_selection() {
     SELECTED_COMPONENTS=("${remaining_components[@]}")
 
     for component in "${SELECTED_COMPONENTS[@]}"; do
-        if component_is_available_on_os "$component" "$OS"; then
+        if component_is_available_on_platform "$component" "$PLATFORM"; then
             available_components+=("$component")
             continue
         fi
@@ -275,7 +277,7 @@ resolve_component_selection() {
         if component_in_list "$component" \
             "${only_components[@]}" "${include_components[@]}"; then
             argument_error \
-                "Component '$component' is platform-specific and only available on: $(component_platforms_text "$component") (current platform: $(platform_display_name "$OS"))."
+                "Component '$component' is platform-specific and only available on: $(component_platforms_text "$component") (current platform: $(platform_display_name "$PLATFORM"))."
             return 1
         fi
     done
@@ -294,7 +296,7 @@ setup_components() {
 
     for ((index = 0; index < ${#COMPONENT_NAMES[@]}; index++)); do
         component="${COMPONENT_NAMES[$index]}"
-        component_is_available_on_os "$component" "$OS" || continue
+        component_is_available_on_platform "$component" "$PLATFORM" || continue
 
         display_name="${COMPONENT_DISPLAY_NAMES[$index]}"
         setup_function="${COMPONENT_SETUP_FUNCTIONS[$index]}"

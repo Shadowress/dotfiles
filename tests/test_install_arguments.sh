@@ -167,6 +167,19 @@ register_component_arguments() {
     source "$TEST_ROOT/components/arguments/components.sh"
 }
 
+use_fixture_component_registry() {
+    COMPONENT_NAMES=("base" "extra" "platform-only")
+    COMPONENT_DISPLAY_NAMES=("Base" "Extra" "Platform Only")
+    COMPONENT_SETUP_FUNCTIONS=(
+        "setup_base"
+        "setup_extra"
+        "setup_platform_only"
+    )
+    COMPONENT_PLATFORMS=("all" "all" "mac")
+    MINIMAL_COMPONENTS=("base")
+    SELECTED_COMPONENTS=()
+}
+
 selected_components_are() {
     local component
 
@@ -177,80 +190,78 @@ selected_components_are() {
 }
 
 test_component_selection_modes() (
-    OS="linux"
+    PLATFORM="linux"
+    use_fixture_component_registry
     register_component_arguments || return 1
 
     parse_arguments || return 1
     resolve_component_selection || return 1
-    selected_components_are dotnet git gcm nvim || return 1
+    selected_components_are base extra || return 1
 
     parse_arguments --minimal || return 1
     resolve_component_selection || return 1
-    selected_components_are git gcm || return 1
+    selected_components_are base || return 1
 
-    parse_arguments --minimal --include nvim,dotnet || return 1
+    parse_arguments --minimal --include extra || return 1
     resolve_component_selection || return 1
-    selected_components_are git gcm nvim dotnet || return 1
+    selected_components_are base extra || return 1
 
-    parse_arguments --minimal --skip gcm || return 1
+    parse_arguments --minimal --skip base || return 1
     resolve_component_selection || return 1
-    selected_components_are git || return 1
+    selected_components_are || return 1
 
-    parse_arguments --minimal --include nvim --skip gcm || return 1
+    parse_arguments --minimal --include extra --skip base || return 1
     resolve_component_selection || return 1
-    selected_components_are git nvim || return 1
+    selected_components_are extra || return 1
 
-    parse_arguments --only nvim || return 1
+    parse_arguments --only extra || return 1
     resolve_component_selection || return 1
-    selected_components_are nvim || return 1
+    selected_components_are extra || return 1
 
-    parse_arguments --only=git,nvim || return 1
+    parse_arguments --only=base,extra || return 1
     resolve_component_selection || return 1
-    selected_components_are git nvim || return 1
+    selected_components_are base extra || return 1
 
-    parse_arguments --only git,dotnet || return 1
+    parse_arguments --skip extra || return 1
     resolve_component_selection || return 1
-    selected_components_are git dotnet || return 1
+    selected_components_are base || return 1
 
-    parse_arguments --skip nvim,gcm || return 1
-    resolve_component_selection || return 1
-    selected_components_are dotnet git || return 1
-
-    OS="mac"
+    PLATFORM="mac"
     parse_arguments || return 1
     resolve_component_selection || return 1
-    selected_components_are homebrew dotnet git gcm nvim || return 1
+    selected_components_are base extra platform-only || return 1
 
-    parse_arguments --only homebrew || return 1
+    parse_arguments --only platform-only || return 1
     resolve_component_selection || return 1
-    selected_components_are homebrew || return 1
+    selected_components_are platform-only || return 1
 
-    parse_arguments --minimal --include homebrew || return 1
+    parse_arguments --minimal --include platform-only || return 1
     resolve_component_selection || return 1
-    selected_components_are git gcm homebrew || return 1
+    selected_components_are base platform-only || return 1
 
-    parse_arguments --skip homebrew || return 1
+    parse_arguments --skip platform-only || return 1
     resolve_component_selection || return 1
-    selected_components_are dotnet git gcm nvim
+    selected_components_are base extra
 )
 
 test_invalid_component_selections_are_rejected() (
-    OS="linux"
+    PLATFORM="linux"
+    use_fixture_component_registry
     register_component_arguments || return 1
 
-    parse_arguments --only nvim --minimal || return 1
+    parse_arguments --only extra --minimal || return 1
     command_fails resolve_component_selection || return 1
 
-    parse_arguments --only nvim --include git || return 1
+    parse_arguments --only extra --include base || return 1
     command_fails resolve_component_selection || return 1
 
-    parse_arguments --only nvim --skip git || return 1
+    parse_arguments --only extra --skip base || return 1
     command_fails resolve_component_selection || return 1
 
-    parse_arguments --include nvim || return 1
+    parse_arguments --include extra || return 1
     command_fails resolve_component_selection || return 1
 
-    parse_arguments --minimal --include nvim --skip nvim || return 1
+    parse_arguments --minimal --include extra --skip extra || return 1
     capture_command resolve_component_selection
     [[ $CAPTURED_STATUS -ne 0 ]] &&
         [[ "$CAPTURED_OUTPUT" == *"both included and skipped"* ]] || return 1
@@ -260,7 +271,7 @@ test_invalid_component_selections_are_rejected() (
     [[ $CAPTURED_STATUS -ne 0 ]] &&
         [[ "$CAPTURED_OUTPUT" == *"Unknown component 'unknown'"* ]] || return 1
 
-    parse_arguments --only homebrew || return 1
+    parse_arguments --only platform-only || return 1
     capture_command resolve_component_selection
     [[ $CAPTURED_STATUS -ne 0 ]] &&
         [[ "$CAPTURED_OUTPUT" == *"platform-specific"* ]] &&
@@ -271,13 +282,11 @@ test_invalid_component_selections_are_rejected() (
 test_help_and_unknown_options() (
     capture_command bash "$TEST_ROOT/install.sh" --help
     [[ $CAPTURED_STATUS -eq 0 ]] || return 1
-    for option in --skip --only --minimal --include --help -h \
-        --wsl-gcm --gcm-credential-store; do
+    for option in --skip --only --minimal --include --help -h; do
         [[ "$CAPTURED_OUTPUT" == *"$option"* ]] || return 1
     done
-    [[ "$CAPTURED_OUTPUT" == *"homebrew"* ]] &&
-        [[ "$CAPTURED_OUTPUT" == *"Homebrew"* ]] &&
-        [[ "$CAPTURED_OUTPUT" == *"macOS"* ]] || return 1
+    [[ "$CAPTURED_OUTPUT" == *"Components:"* ]] &&
+        [[ "$CAPTURED_OUTPUT" == *"Minimal Components:"* ]] || return 1
 
     capture_command bash "$TEST_ROOT/install.sh" -h
     [[ $CAPTURED_STATUS -eq 0 ]] || return 1
@@ -306,7 +315,7 @@ test_setup_runs_only_selected_components() (
     )
     COMPONENT_PLATFORMS=("all" "all" "mac")
     SELECTED_COMPONENTS=("second" "platform-only")
-    OS="linux"
+    PLATFORM="linux"
 
     setup_first() { calls="${calls}first "; }
     setup_second() { calls="${calls}second "; }

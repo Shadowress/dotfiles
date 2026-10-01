@@ -8,7 +8,7 @@ setup_nvim() {
 install_nvim() {
     ! is_command_in_path "nvim" || return 0
 
-    case "$OS" in
+    case "$PLATFORM" in
         linux|wsl)
             case "$DISTRO" in
                 ubuntu|debian)
@@ -57,7 +57,7 @@ install_nvim() {
 configure_nvim_environment() {
     local nvim_executable
 
-    case "$OS" in
+    case "$PLATFORM" in
         linux|wsl)
             nvim_executable="$(find_executable \
                 "$HOME/.local/bin/nvim" \
@@ -106,11 +106,11 @@ configure_nvim_environment() {
 configure_nvim_settings() {
     local nvim_config="$CONFIG/nvim"
 
-    if [[ "$OS" == "windows" ]]; then
+    if [[ "$PLATFORM" == "windows" ]]; then
         [[ -n "$WINDOWS_LOCAL_APP_DATA" ]] || return 1
         nvim_config="$WINDOWS_LOCAL_APP_DATA/nvim"
     fi
 
     mkdir -p "${nvim_config%/*}" &&
-        link_path "$DOTFILES/common/nvim" "$nvim_config"
+        link_path "$DOTFILES/config/nvim" "$nvim_config"
 }

@@ -102,13 +102,13 @@ test_existing_repository_and_arguments() (
     }
 
     output="$(
-        main '--minimal' '--include=nvim,dotnet' \
+        main '--minimal' '--include=first,second' \
             'literal;$(touch should-not-run)'
     )" || return 1
     [[ "$output" == *'[OK] Git:'* ]] &&
         [[ "$output" == *'[OK] Dotfiles:'* ]] &&
         [[ "$output" == *'installer argument: <--minimal>'* ]] &&
-        [[ "$output" == *'installer argument: <--include=nvim,dotnet>'* ]] &&
+        [[ "$output" == *'installer argument: <--include=first,second>'* ]] &&
         [[ "$output" == *'installer argument: <literal;$(touch should-not-run)>'* ]] &&
         [[ "$output" == *'[OK] Bootstrap: Installation completed.'* ]] &&
         [[ ! -e "$temporary_home/should-not-run" ]]

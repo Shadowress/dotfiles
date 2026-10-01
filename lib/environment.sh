@@ -2,6 +2,10 @@ is_command_in_path() {
     command -v "$1" &>/dev/null
 }
 
+is_executable_usable() {
+    "$1" --version &>/dev/null
+}
+
 find_executable() {
     local candidate
     local filter=""
@@ -62,7 +66,7 @@ link_path() {
         return 0
     fi
 
-    if [[ "$OS" != "windows" ]]; then
+    if [[ "$PLATFORM" != "windows" ]]; then
         ln -s "$source" "$target"
         return
     fi

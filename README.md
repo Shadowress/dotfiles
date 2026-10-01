@@ -4,6 +4,19 @@ This repository contains personal dotfiles for configuring and setting up develo
 
 ---
 
+## Components
+
+| Value | Installs | Availability | In `--minimal` |
+|---|---|---|:---:|
+| `dotnet` | .NET SDK | All platforms | No |
+| `gcm` | Git Credential Manager | All platforms | Yes |
+| `git` | Git | All platforms | Yes |
+| `homebrew` | Homebrew | macOS | No |
+| `nvim` | Neovim | All platforms | No |
+| `pyenv` | Python Version Manager | All platforms | No |
+
+---
+
 ## Installation
 
 | Environment | Entry point | Installer arguments | Notes |
@@ -54,7 +67,7 @@ bash install.sh
       <th>Argument</th>
       <th>Value</th>
       <th>What it does</th>
-      <th>Available when</th>
+      <th>Availability</th>
     </tr>
   </thead>
   <tbody>
@@ -63,38 +76,38 @@ bash install.sh
       <th><code>--help</code>, <code>-h</code></th>
       <td><em>No value</em></td>
       <td>Show concise usage, valid components, minimal components, accepted values, and examples, then exit successfully without installing anything. Unknown options fail with a reference to <code>--help</code>.</td>
-      <td>All</td>
+      <td>All platforms</td>
     </tr>
     <tr>
       <th><code>--include &lt;components&gt;</code></th>
-      <td>Comma-separated: <code>dotnet</code>, <code>gcm</code>, <code>git</code>, <code>homebrew</code> (<strong>macOS</strong> only), <code>nvim</code></td>
-      <td>Add components to the minimal selection. Requires <code>--minimal</code> and cannot be combined with <code>--only</code>. A component cannot be both included and skipped.</td>
-      <td>All</td>
+      <td><code>&lt;component&gt;[,&lt;component&gt;...]</code></td>
+      <td>Add one or more <a href="#components">components</a> to the minimal selection. Requires <code>--minimal</code> and cannot be combined with <code>--only</code>. A component cannot be both included and skipped.</td>
+      <td>All platforms</td>
     </tr>
     <tr>
       <th><code>--minimal</code></th>
       <td><em>No value</em></td>
       <td>Start with the centrally defined minimal selection. Cannot be combined with <code>--only</code>.</td>
-      <td>All</td>
+      <td>All platforms</td>
     </tr>
     <tr>
       <th><code>--only &lt;components&gt;</code></th>
-      <td>Comma-separated: <code>dotnet</code>, <code>gcm</code>, <code>git</code>, <code>homebrew</code> (<strong>macOS</strong> only), <code>nvim</code></td>
-      <td>Install only the listed components. Cannot be combined with <code>--minimal</code>, <code>--include</code>, or <code>--skip</code>.</td>
-      <td>All</td>
+      <td><code>&lt;component&gt;[,&lt;component&gt;...]</code></td>
+      <td>Install only one or more listed <a href="#components">components</a>. Cannot be combined with <code>--minimal</code>, <code>--include</code>, or <code>--skip</code>.</td>
+      <td>All platforms</td>
     </tr>
     <tr>
       <th><code>--skip &lt;components&gt;</code></th>
-      <td>Comma-separated: <code>dotnet</code>, <code>gcm</code>, <code>git</code>, <code>homebrew</code> (<strong>macOS</strong> only), <code>nvim</code></td>
-      <td>Remove components from the default or minimal selection. Cannot be combined with <code>--only</code>. A component cannot be both included and skipped.</td>
-      <td>All</td>
+      <td><code>&lt;component&gt;[,&lt;component&gt;...]</code></td>
+      <td>Remove one or more listed <a href="#components">components</a> from the default or minimal selection. Cannot be combined with <code>--only</code>. A component cannot be both included and skipped.</td>
+      <td>All platforms</td>
     </tr>
     <tr>
       <td rowspan="12">Git Credential Manager (GCM)</td>
       <th rowspan="9"><code>--gcm-credential-store=&lt;value&gt;</code></th>
       <td><code>default</code> <strong>(default)</strong></td>
       <td>Retain the existing backend default: <strong>Linux</strong> uses <code>secretservice</code>, native <strong>WSL</strong> uses <code>cache</code>, <strong>macOS</strong> uses GCM's <code>keychain</code>, and <strong>Windows</strong> GCM (including when called from <strong>WSL</strong>) uses <code>wincredman</code>.</td>
-      <td>All</td>
+      <td>All platforms</td>
     </tr>
     <tr>
       <td><code>wincredman</code></td>
@@ -124,17 +137,17 @@ bash install.sh
     <tr>
       <td><code>cache</code></td>
       <td>Keep credentials temporarily in Git's in-memory credential cache.</td>
-      <td>All</td>
+      <td>All platforms</td>
     </tr>
     <tr>
       <td><code>plaintext</code></td>
       <td>Store credentials in unencrypted files. See the <a href="https://github.com/git-ecosystem/git-credential-manager/blob/main/docs/credstores.md">GCM credential-store documentation</a> before using this insecure option.</td>
-      <td>All</td>
+      <td>All platforms</td>
     </tr>
     <tr>
       <td><code>none</code></td>
       <td>Disable GCM credential storage.</td>
-      <td>All</td>
+      <td>All platforms</td>
     </tr>
     <tr>
       <th rowspan="3"><code>--wsl-gcm=&lt;value&gt;</code></th>

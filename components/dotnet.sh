@@ -14,7 +14,7 @@ has_dotnet_lts_sdk() {
 install_dotnet() {
     ! is_command_in_path "dotnet" || ! has_dotnet_lts_sdk "dotnet" || return 0
 
-    case "$OS" in
+    case "$PLATFORM" in
         linux|wsl)
             case "$DISTRO" in
                 ubuntu|debian)
@@ -66,7 +66,7 @@ configure_dotnet_environment() {
     local dotnet_root="${DOTNET_ROOT:-}"
     local dotnet_tools="$HOME/.dotnet/tools"
 
-    case "$OS" in
+    case "$PLATFORM" in
         linux|wsl)
             dotnet_executable="$(find_executable --filter has_dotnet_lts_sdk \
                 "${dotnet_root:+$dotnet_root/dotnet}" \
