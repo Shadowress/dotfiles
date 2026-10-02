@@ -49,6 +49,43 @@ Invoke-Test -Name 'PowerShell status output matches installer format' -Test {
         "[INFO] Bootstrap: first`n        second"
 }
 
+Invoke-Test -Name 'PowerShell user environment is validated' -Test {
+    $temporaryRoot = New-TestDirectory
+    $previousDotfilesPath = $script:DotfilesPath
+    try {
+        $script:DotfilesPath = ''
+        Initialize-UserEnvironment -HomeDirectory $temporaryRoot
+        $validPath = $script:DotfilesPath -eq `
+            (Join-Path $temporaryRoot '.dotfiles')
+
+        $invalidHomes = @(
+            ''
+            'relative\home'
+            (Join-Path $temporaryRoot 'missing')
+            [IO.Path]::GetPathRoot($temporaryRoot)
+        )
+        foreach ($invalidHome in $invalidHomes) {
+            try {
+                Initialize-UserEnvironment -HomeDirectory $invalidHome
+                return $false
+            }
+            catch {
+                if (-not $_.Exception.Message.Contains(
+                        '[ERROR] Environment:'
+                    )) {
+                    return $false
+                }
+            }
+        }
+
+        return $validPath
+    }
+    finally {
+        $script:DotfilesPath = $previousDotfilesPath
+        Remove-TestDirectory -Path $temporaryRoot
+    }
+}
+
 Invoke-Test -Name 'Git and Git Bash are discovered' -Test {
     return $null -ne $script:GitPath -and
         $null -ne $script:BashPath -and

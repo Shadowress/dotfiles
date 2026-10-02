@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG="$HOME/.config"
+CONFIG=""
 
 source "$DOTFILES/lib/arguments.sh"
 source "$DOTFILES/lib/components.sh"
@@ -20,6 +20,8 @@ main() {
         print_install_help
         return 0
     fi
+
+    initialize_user_environment || return 1
 
     detect_platform || return 1
 

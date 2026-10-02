@@ -59,4 +59,16 @@ capture_command env HOME="$PROBE_DIRECTORY" \
 [[ $CAPTURED_STATUS -ne 0 ]]
 [[ "$CAPTURED_OUTPUT" == *'[ERROR] Dotfiles:'* ]]
 
+capture_command env HOME= bash "$TEST_ROOT/bootstrap.sh"
+[[ $CAPTURED_STATUS -ne 0 ]]
+[[ "$CAPTURED_OUTPUT" == *'[ERROR] Environment: HOME is empty'* ]]
+
+capture_command env HOME=/ bash "$TEST_ROOT/bootstrap.sh"
+[[ $CAPTURED_STATUS -ne 0 ]]
+[[ "$CAPTURED_OUTPUT" == *'[ERROR] Environment: HOME cannot resolve'* ]]
+
+capture_command env HOME=/tmp/.. bash "$TEST_ROOT/bootstrap.sh"
+[[ $CAPTURED_STATUS -ne 0 ]]
+[[ "$CAPTURED_OUTPUT" == *'[ERROR] Environment: HOME cannot resolve'* ]]
+
 printf '[OK] Test: Bootstrap shell entry point succeeded\n'

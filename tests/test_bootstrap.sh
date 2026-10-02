@@ -11,6 +11,7 @@ BOOTSTRAP_DEFINITIONS="$(
 
 load_bootstrap() {
     eval "$BOOTSTRAP_DEFINITIONS"
+    initialize_user_environment
 }
 
 test_status_format() (

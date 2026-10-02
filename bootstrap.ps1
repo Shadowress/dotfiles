@@ -8,7 +8,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $RepositoryUrl = 'https://github.com/Shadowress/dotfiles.git'
-$DotfilesPath = Join-Path $HOME '.dotfiles'
+$DotfilesPath = ''
 
 function Write-Status {
     param(
@@ -30,6 +30,37 @@ function Stop-Bootstrap {
     param([string] $Component, [string] $Message)
 
     throw "[ERROR] ${Component}: $Message"
+}
+
+function Initialize-UserEnvironment {
+    param([AllowEmptyString()][string] $HomeDirectory = $HOME)
+
+    if ([string]::IsNullOrWhiteSpace($HomeDirectory)) {
+        Stop-Bootstrap -Component 'Environment' `
+            -Message 'HOME is empty. Run the bootstrap as the user being configured.'
+    }
+    if (-not [IO.Path]::IsPathRooted($HomeDirectory)) {
+        Stop-Bootstrap -Component 'Environment' `
+            -Message "HOME must be an absolute path: $HomeDirectory"
+    }
+    if (-not (Test-Path -LiteralPath $HomeDirectory -PathType Container)) {
+        Stop-Bootstrap -Component 'Environment' `
+            -Message "HOME is not an existing directory: $HomeDirectory"
+    }
+
+    $homeItem = Get-Item -LiteralPath $HomeDirectory -Force
+    $resolvedHome = [IO.Path]::GetFullPath($homeItem.FullName).TrimEnd('\', '/')
+    $resolvedRoot = [IO.Path]::GetPathRoot($resolvedHome).TrimEnd('\', '/')
+    if ([StringComparer]::OrdinalIgnoreCase.Equals(
+            $resolvedHome, $resolvedRoot
+        )) {
+        Stop-Bootstrap -Component 'Environment' `
+            -Message 'HOME cannot resolve to a filesystem root.'
+    }
+
+    if (-not $script:DotfilesPath) {
+        $script:DotfilesPath = Join-Path $HomeDirectory '.dotfiles'
+    }
 }
 
 function Test-Program {
@@ -219,6 +250,8 @@ function Invoke-RepositoryUpdate {
 }
 
 function Invoke-Bootstrap {
+    Initialize-UserEnvironment
+
     $git = Find-Git
     $bash = if ($git) { Find-Bash -GitPath $git } else { $null }
 

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 readonly REPOSITORY_URL="https://github.com/Shadowress/dotfiles.git"
-readonly DOTFILES="$HOME/.dotfiles"
+DOTFILES=""
 GIT_EXECUTABLE=""
 
 print_status() {
@@ -22,6 +22,35 @@ print_status() {
 fail() {
     print_status "ERROR" "$1" "$2" >&2
     exit 1
+}
+
+initialize_user_environment() {
+    local home_directory="${HOME:-}"
+    local resolved_home
+
+    [[ -n "$home_directory" ]] ||
+        fail "Environment" \
+            "HOME is empty. Run the bootstrap as the user being configured."
+
+    case "$home_directory" in
+        /*) ;;
+        *)
+            fail "Environment" \
+                "HOME must be an absolute path: $home_directory"
+            ;;
+    esac
+
+    [[ -d "$home_directory" ]] ||
+        fail "Environment" \
+            "HOME is not an existing directory: $home_directory"
+
+    resolved_home="$(cd "$home_directory" && pwd -P)" ||
+        fail "Environment" "HOME could not be resolved: $home_directory"
+    [[ "$resolved_home" != "/" ]] ||
+        fail "Environment" \
+            "HOME cannot resolve to the filesystem root (/)."
+
+    DOTFILES="$home_directory/.dotfiles"
 }
 
 find_usable_git() {
@@ -154,6 +183,8 @@ update_repository() {
 main() {
     local installer_exit_code
     local -a install_arguments=("$@")
+
+    initialize_user_environment
 
     case "$(uname -s)" in
         Linux*|Darwin*) ;;

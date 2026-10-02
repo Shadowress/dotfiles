@@ -2,6 +2,46 @@ is_command_in_path() {
     command -v "$1" &>/dev/null
 }
 
+initialize_user_environment() {
+    local home_directory="${HOME:-}"
+    local resolved_home
+
+    if [[ -z "$home_directory" ]]; then
+        print_status "ERROR" "Environment" \
+            "HOME is empty. Run the installer as the user being configured."
+        return 1
+    fi
+
+    case "$home_directory" in
+        /*) ;;
+        *)
+            print_status "ERROR" "Environment" \
+                "HOME must be an absolute path: $home_directory"
+            return 1
+            ;;
+    esac
+
+    if [[ ! -d "$home_directory" ]]; then
+        print_status "ERROR" "Environment" \
+            "HOME is not an existing directory: $home_directory"
+        return 1
+    fi
+
+    resolved_home="$(cd "$home_directory" && pwd -P)" || {
+        print_status "ERROR" "Environment" \
+            "HOME could not be resolved: $home_directory"
+        return 1
+    }
+
+    if [[ "$resolved_home" == "/" ]]; then
+        print_status "ERROR" "Environment" \
+            "HOME cannot resolve to the filesystem root (/)."
+        return 1
+    fi
+
+    CONFIG="$home_directory/.config"
+}
+
 is_executable_usable() {
     "$1" --version &>/dev/null
 }

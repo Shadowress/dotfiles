@@ -27,6 +27,7 @@ $powershell = (Get-Command powershell.exe -CommandType Application |
 $shellBehavior = 'tests/test_bootstrap.sh'
 $shellEntry = 'tests/test_bootstrap_entry.sh'
 $installerArguments = 'tests/test_install_arguments.sh'
+$installerEnvironment = 'tests/test_environment.sh'
 $powerShellBehavior = Join-Path $PSScriptRoot 'test_bootstrap.ps1'
 $powerShellEntry = Join-Path $PSScriptRoot 'test_bootstrap_entry.ps1'
 $previousAggregate = $env:DOTFILES_TEST_AGGREGATE
@@ -45,6 +46,10 @@ try {
     Invoke-ReportedTestSuite -Name 'installer argument behavior' -Action {
         & $Wsl --cd $RepositoryRoot -- `
             env DOTFILES_TEST_AGGREGATE=true bash $installerArguments
+    }
+    Invoke-ReportedTestSuite -Name 'installer environment behavior' -Action {
+        & $Wsl --cd $RepositoryRoot -- `
+            env DOTFILES_TEST_AGGREGATE=true bash $installerEnvironment
     }
     Invoke-ReportedTestSuite -Name 'PowerShell bootstrap behavior' -Action {
         & $powershell -NoProfile -ExecutionPolicy Bypass `
