@@ -29,7 +29,7 @@ configure_homebrew_environment() {
     local brew_executable
     local shell_environment
 
-    brew_executable="$(find_executable \
+    brew_executable="$(find_executable "brew" \
         "/opt/homebrew/bin/brew" \
         "/usr/local/bin/brew")" || {
         printf 'Homebrew is installed, but its executable could not be found.\n'

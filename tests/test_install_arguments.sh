@@ -176,6 +176,7 @@ use_fixture_component_registry() {
         "setup_platform_only"
     )
     COMPONENT_PLATFORMS=("all" "all" "mac")
+    COMPONENT_DEPENDENCIES=("" "" "")
     MINIMAL_COMPONENTS=("base")
     SELECTED_COMPONENTS=()
 }
@@ -279,6 +280,25 @@ test_invalid_component_selections_are_rejected() (
         [[ "$CAPTURED_OUTPUT" == *"current platform: Linux"* ]]
 )
 
+test_component_dependencies_must_be_selected() (
+    PLATFORM="linux"
+    use_fixture_component_registry
+    COMPONENT_DEPENDENCIES=("" "base" "")
+    register_component_arguments || return 1
+
+    parse_arguments --skip base || return 1
+    capture_command resolve_component_selection
+    [[ $CAPTURED_STATUS -ne 0 ]] &&
+        [[ "$CAPTURED_OUTPUT" == \
+            *"Component 'extra' requires component 'base'"* ]] || return 1
+
+    parse_arguments --only extra || return 1
+    capture_command resolve_component_selection
+    [[ $CAPTURED_STATUS -ne 0 ]] &&
+        [[ "$CAPTURED_OUTPUT" == \
+            *"Component 'extra' requires component 'base'"* ]]
+)
+
 test_help_and_unknown_options() (
     capture_command bash "$TEST_ROOT/install.sh" --help
     [[ $CAPTURED_STATUS -eq 0 ]] || return 1
@@ -314,6 +334,7 @@ test_setup_runs_only_selected_components() (
         "setup_platform_only"
     )
     COMPONENT_PLATFORMS=("all" "all" "mac")
+    COMPONENT_DEPENDENCIES=("" "" "")
     SELECTED_COMPONENTS=("second" "platform-only")
     PLATFORM="linux"
 
@@ -327,6 +348,37 @@ test_setup_runs_only_selected_components() (
     [[ "$calls" == "second " ]] &&
         [[ $SETUP_TOTAL -eq 1 ]] &&
         [[ $SETUP_SUCCEEDED -eq 1 ]]
+)
+
+test_failed_dependencies_block_dependent_setups() (
+    local calls=""
+    local output
+    local output_directory
+    local output_file
+
+    output_directory="$(make_test_directory dotfiles-dependency-test)" || return 1
+    trap 'remove_test_directory "$output_directory" dotfiles-dependency-test' EXIT
+    output_file="$output_directory/output"
+
+    COMPONENT_NAMES=("base" "dependent")
+    COMPONENT_DISPLAY_NAMES=("Base" "Dependent")
+    COMPONENT_SETUP_FUNCTIONS=("setup_base" "setup_dependent")
+    COMPONENT_PLATFORMS=("all" "all")
+    COMPONENT_DEPENDENCIES=("" "base")
+    SELECTED_COMPONENTS=("base" "dependent")
+    PLATFORM="linux"
+
+    setup_base() { calls="${calls}base "; return 1; }
+    setup_dependent() { calls="${calls}dependent "; }
+
+    reset_setup_counts
+    setup_components > "$output_file" || return 1
+    output="$(< "$output_file")"
+
+    [[ "$calls" == "base " ]] &&
+        [[ $SETUP_TOTAL -eq 2 ]] &&
+        [[ $SETUP_FAILED -eq 2 ]] &&
+        [[ "$output" == *"Dependency failed: Base"* ]]
 )
 
 run_test 'defaults are initialized' test_defaults_are_initialized
@@ -350,9 +402,13 @@ run_test 'component selection modes are deterministic' \
     test_component_selection_modes
 run_test 'invalid component selections are rejected' \
     test_invalid_component_selections_are_rejected
+run_test 'component dependencies must be selected' \
+    test_component_dependencies_must_be_selected
 run_test 'help and unknown options behave consistently' \
     test_help_and_unknown_options
 run_test 'setup runs only selected components' \
     test_setup_runs_only_selected_components
+run_test 'failed dependencies block dependent component setups' \
+    test_failed_dependencies_block_dependent_setups
 
 finish_test_suite 'Installer argument tests'

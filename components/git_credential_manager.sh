@@ -9,6 +9,7 @@ GIT_CREDENTIAL_MANAGER_BACKEND=""
 
 find_windows_git_credential_manager_executable() {
     find_executable --filter is_executable_usable \
+        "git-credential-manager.exe" \
         "/ucrt64/bin/git-credential-manager.exe" \
         "/mingw64/bin/git-credential-manager.exe" \
         "/clangarm64/bin/git-credential-manager.exe" \
@@ -23,8 +24,8 @@ find_windows_git_credential_manager_executable() {
 find_native_git_credential_manager_executable() {
     case "$PLATFORM" in
         linux|wsl)
-            find_executable \
-                --filter is_executable_usable \
+            find_executable --filter is_executable_usable \
+                "git-credential-manager" \
                 "$HOME/.dotnet/tools/git-credential-manager" \
                 "/usr/local/bin/git-credential-manager" \
                 "/usr/bin/git-credential-manager"
@@ -32,6 +33,7 @@ find_native_git_credential_manager_executable() {
 
         mac)
             find_executable --filter is_executable_usable \
+                "git-credential-manager" \
                 "/opt/homebrew/bin/git-credential-manager" \
                 "/usr/local/bin/git-credential-manager" \
                 "/opt/homebrew/share/gcm-core/git-credential-manager" \

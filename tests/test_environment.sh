@@ -48,6 +48,47 @@ test_unsafe_home_values_are_rejected() (
         [[ "$CAPTURED_OUTPUT" == *"not an existing directory"* ]]
 )
 
+test_command_discovery_uses_path_and_fallback_candidates() (
+    local candidate_result
+    local discovery_status=0
+    local original_path="$PATH"
+    local path_result
+    local temporary_home
+    local unfiltered_result
+
+    temporary_home="$(make_test_directory dotfiles-environment-test)" || return 1
+    trap 'remove_test_directory "$temporary_home" dotfiles-environment-test' EXIT
+    mkdir -p "$temporary_home/path" "$temporary_home/empty" || return 1
+    printf '#!/bin/bash\nprintf "fixture 1.0\\n"\n' \
+        > "$temporary_home/path/fixture-command"
+    printf '#!/bin/bash\nexit 1\n' > "$temporary_home/unusable"
+    printf '#!/bin/bash\nprintf "fixture 1.0\\n"\n' \
+        > "$temporary_home/fallback"
+    chmod +x "$temporary_home/path/fixture-command" \
+        "$temporary_home/unusable" "$temporary_home/fallback" || return 1
+
+    PATH="$temporary_home/path"
+    path_result="$(find_executable --filter is_executable_usable \
+        "fixture-command" \
+        "$temporary_home/fallback")" || discovery_status=1
+
+    PATH="$temporary_home/empty"
+    candidate_result="$(find_executable --filter is_executable_usable \
+        "fixture-command" \
+        "$temporary_home/unusable" "$temporary_home/fallback")" || \
+        discovery_status=1
+    unfiltered_result="$(find_executable \
+        "missing-command" "$temporary_home/unusable")" || \
+        discovery_status=1
+    PATH="$original_path"
+    hash -r
+
+    (( discovery_status == 0 )) &&
+        [[ "$path_result" == "$temporary_home/path/fixture-command" ]] &&
+        [[ "$candidate_result" == "$temporary_home/fallback" ]] &&
+        [[ "$unfiltered_result" == "$temporary_home/unusable" ]]
+)
+
 test_existing_correct_link_is_idempotent() (
     local temporary_home
 
@@ -55,6 +96,19 @@ test_existing_correct_link_is_idempotent() (
     trap 'remove_test_directory "$temporary_home" dotfiles-environment-test' EXIT
     printf 'source\n' > "$temporary_home/source"
     ln -s "$temporary_home/source" "$temporary_home/target" || return 1
+    PLATFORM="linux"
+
+    link_path "$temporary_home/source" "$temporary_home/target" || return 1
+    [[ "$temporary_home/source" -ef "$temporary_home/target" ]]
+)
+
+test_stale_link_is_updated() (
+    local temporary_home
+
+    temporary_home="$(make_test_directory dotfiles-environment-test)" || return 1
+    trap 'remove_test_directory "$temporary_home" dotfiles-environment-test' EXIT
+    printf 'source\n' > "$temporary_home/source"
+    ln -s "$temporary_home/missing" "$temporary_home/target" || return 1
     PLATFORM="linux"
 
     link_path "$temporary_home/source" "$temporary_home/target" || return 1
@@ -79,8 +133,12 @@ test_conflicting_target_is_preserved() (
 run_test 'valid HOME initializes the configuration directory' \
     test_valid_home_initializes_config
 run_test 'unsafe HOME values are rejected' test_unsafe_home_values_are_rejected
+run_test 'command discovery uses PATH and fallback candidates' \
+    test_command_discovery_uses_path_and_fallback_candidates
 run_test 'an existing correct symlink is idempotent' \
     test_existing_correct_link_is_idempotent
+run_test 'a stale symlink is updated to the requested source' \
+    test_stale_link_is_updated
 run_test 'a conflicting link target is preserved' \
     test_conflicting_target_is_preserved
 

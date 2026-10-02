@@ -6,14 +6,14 @@ This repository contains personal dotfiles for configuring and setting up develo
 
 ## Components
 
-| Value | Installs | Availability | In `--minimal` |
-|---|---|---|:---:|
-| `dotnet` | .NET SDK | All platforms | No |
-| `gcm` | Git Credential Manager | All platforms | Yes |
-| `git` | Git | All platforms | Yes |
-| `homebrew` | Homebrew | macOS | No |
-| `nvim` | Neovim | All platforms | No |
-| `pyenv` | Python Version Manager | All platforms | No |
+| Value | Installs | Availability | Requires | In `--minimal` |
+|---|---|---|---|:---:|
+| `dotnet` | .NET SDK | All platforms | — | No |
+| `gcm` | Git Credential Manager | All platforms | `git` | Yes |
+| `git` | Git | All platforms | — | Yes |
+| `homebrew` | Homebrew | macOS | — | No |
+| `nvim` | Neovim | All platforms | — | No |
+| `pyenv` | Python Version Manager | All platforms | — | No |
 
 ---
 

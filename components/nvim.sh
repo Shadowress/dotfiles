@@ -5,8 +5,43 @@ setup_nvim() {
         configure_nvim_settings
 }
 
+find_nvim_executable() {
+    case "$PLATFORM" in
+        linux|wsl)
+            find_executable --filter is_executable_usable "nvim" \
+                "$HOME/.local/bin/nvim" \
+                "/usr/local/bin/nvim" \
+                "/usr/bin/nvim" \
+                "/opt/nvim/bin/nvim" \
+                "/opt/nvim-linux-x86_64/bin/nvim" \
+                "/opt/nvim-linux-arm64/bin/nvim" \
+                "/snap/bin/nvim"
+            ;;
+
+        windows)
+            find_executable --filter is_executable_usable "nvim" \
+                "$WINDOWS_PROGRAM_FILES/Neovim/bin/nvim.exe" \
+                "$WINDOWS_PROGRAM_FILES/nvim/bin/nvim.exe" \
+                "${WINDOWS_LOCAL_APP_DATA:+$WINDOWS_LOCAL_APP_DATA/Programs/Neovim/bin/nvim.exe}" \
+                "${WINDOWS_LOCAL_APP_DATA:+$WINDOWS_LOCAL_APP_DATA/Programs/nvim/bin/nvim.exe}" \
+                "${WINDOWS_LOCAL_APP_DATA:+$WINDOWS_LOCAL_APP_DATA/Microsoft/WinGet/Links/nvim.exe}"
+            ;;
+
+        mac)
+            find_executable --filter is_executable_usable "nvim" \
+                "/opt/homebrew/bin/nvim" \
+                "/usr/local/bin/nvim" \
+                "/opt/local/bin/nvim"
+            ;;
+
+        *)
+            return 1
+            ;;
+    esac
+}
+
 install_nvim() {
-    ! is_command_in_path "nvim" || return 0
+    ! find_nvim_executable &>/dev/null || return 0
 
     case "$PLATFORM" in
         linux|wsl)
@@ -57,40 +92,7 @@ install_nvim() {
 configure_nvim_environment() {
     local nvim_executable
 
-    case "$PLATFORM" in
-        linux|wsl)
-            nvim_executable="$(find_executable \
-                "$HOME/.local/bin/nvim" \
-                "/usr/local/bin/nvim" \
-                "/usr/bin/nvim" \
-                "/opt/nvim/bin/nvim" \
-                "/opt/nvim-linux-x86_64/bin/nvim" \
-                "/opt/nvim-linux-arm64/bin/nvim" \
-                "/snap/bin/nvim")"
-            ;;
-
-        windows)
-            nvim_executable="$(find_executable \
-                "$WINDOWS_PROGRAM_FILES/Neovim/bin/nvim.exe" \
-                "$WINDOWS_PROGRAM_FILES/nvim/bin/nvim.exe" \
-                "${WINDOWS_LOCAL_APP_DATA:+$WINDOWS_LOCAL_APP_DATA/Programs/Neovim/bin/nvim.exe}" \
-                "${WINDOWS_LOCAL_APP_DATA:+$WINDOWS_LOCAL_APP_DATA/Programs/nvim/bin/nvim.exe}" \
-                "${WINDOWS_LOCAL_APP_DATA:+$WINDOWS_LOCAL_APP_DATA/Microsoft/WinGet/Links/nvim.exe}")"
-            ;;
-
-        mac)
-            nvim_executable="$(find_executable \
-                "/opt/homebrew/bin/nvim" \
-                "/usr/local/bin/nvim" \
-                "/opt/local/bin/nvim")"
-            ;;
-
-        *)
-            return 1
-            ;;
-    esac
-
-    [[ -n "$nvim_executable" ]] || {
+    nvim_executable="$(find_nvim_executable)" || {
         printf 'Neovim was installed, but its executable could not be found.\n'
         return 1
     }

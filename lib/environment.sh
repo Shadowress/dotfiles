@@ -48,7 +48,9 @@ is_executable_usable() {
 
 find_executable() {
     local candidate
+    local command_name
     local filter=""
+    local path_executable=""
 
     if [[ "${1:-}" == "--filter" ]]; then
         [[ -n "${2:-}" ]] || return 2
@@ -57,7 +59,13 @@ find_executable() {
         shift 2
     fi
 
-    for candidate in "$@"; do
+    [[ -n "${1:-}" ]] || return 2
+    command_name="$1"
+    shift
+
+    path_executable="$(command -v "$command_name" 2>/dev/null)" || :
+
+    for candidate in "$path_executable" "$@"; do
         [[ -x "$candidate" ]] || continue
         [[ -z "$filter" ]] || "$filter" "$candidate" || continue
 
@@ -98,12 +106,17 @@ link_path() {
     [[ -e "$source" ]] || return 1
 
     if [[ -e "$target" || -L "$target" ]]; then
-        [[ "$source" -ef "$target" ]] || {
+        [[ "$source" -ef "$target" ]] && return 0
+
+        if [[ -L "$target" && "$PLATFORM" != "windows" ]]; then
+            ln -sfn "$source" "$target"
+            return
+        fi
+
+        if [[ ! -L "$target" ]]; then
             printf 'Refusing to replace existing path: %s\n' "$target"
             return 1
-        }
-
-        return 0
+        fi
     fi
 
     if [[ "$PLATFORM" != "windows" ]]; then
@@ -115,6 +128,11 @@ link_path() {
     windows_target="$(cygpath -w "$target")" || return 1
 
     [[ -d "$source" ]] || return 1
+
+    if [[ -L "$target" ]]; then
+        MSYS2_ARG_CONV_EXCL='*' \
+            cmd.exe /d /c rmdir "$windows_target" >/dev/null || return 1
+    fi
 
     MSYS2_ARG_CONV_EXCL='*' \
         cmd.exe /d /c mklink /J "$windows_target" "$windows_source" >/dev/null

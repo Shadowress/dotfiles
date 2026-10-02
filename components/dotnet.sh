@@ -11,8 +11,56 @@ has_dotnet_lts_sdk() {
         grep -q "^${DOTNET_LTS_VERSION}\."
 }
 
+find_dotnet_executable() {
+    local dotnet_root="${DOTNET_ROOT:-}"
+
+    case "$PLATFORM" in
+        linux|wsl)
+            find_executable --filter has_dotnet_lts_sdk "dotnet" \
+                "${dotnet_root:+$dotnet_root/dotnet}" \
+                "$HOME/.dotnet/dotnet" \
+                "/usr/share/dotnet/dotnet" \
+                "/usr/lib/dotnet/dotnet" \
+                "/usr/lib64/dotnet/dotnet" \
+                "/usr/local/share/dotnet/dotnet" \
+                "/usr/local/bin/dotnet" \
+                "/usr/bin/dotnet"
+            ;;
+
+        windows)
+            if [[ -n "$dotnet_root" ]]; then
+                dotnet_root="$(windows_path_to_unix "$dotnet_root")" || return 1
+            fi
+
+            find_executable --filter has_dotnet_lts_sdk "dotnet" \
+                "${dotnet_root:+$dotnet_root/dotnet.exe}" \
+                "$WINDOWS_PROGRAM_FILES/dotnet/dotnet.exe" \
+                "${WINDOWS_LOCAL_APP_DATA:+$WINDOWS_LOCAL_APP_DATA/Microsoft/dotnet/dotnet.exe}" \
+                "$HOME/.dotnet/dotnet.exe"
+            ;;
+
+        mac)
+            find_executable --filter has_dotnet_lts_sdk "dotnet" \
+                "${dotnet_root:+$dotnet_root/dotnet}" \
+                "$HOME/.dotnet/dotnet" \
+                "/usr/local/share/dotnet/dotnet" \
+                "/usr/local/share/dotnet/x64/dotnet" \
+                "/opt/homebrew/opt/dotnet@${DOTNET_LTS_VERSION}/libexec/dotnet" \
+                "/usr/local/opt/dotnet@${DOTNET_LTS_VERSION}/libexec/dotnet" \
+                "/opt/homebrew/opt/dotnet/libexec/dotnet" \
+                "/usr/local/opt/dotnet/libexec/dotnet" \
+                "/opt/homebrew/bin/dotnet" \
+                "/usr/local/bin/dotnet"
+            ;;
+
+        *)
+            return 1
+            ;;
+    esac
+}
+
 install_dotnet() {
-    ! is_command_in_path "dotnet" || ! has_dotnet_lts_sdk "dotnet" || return 0
+    ! find_dotnet_executable &>/dev/null || return 0
 
     case "$PLATFORM" in
         linux|wsl)
@@ -63,58 +111,13 @@ install_dotnet() {
 
 configure_dotnet_environment() {
     local dotnet_executable
-    local dotnet_root="${DOTNET_ROOT:-}"
     local dotnet_tools="$HOME/.dotnet/tools"
 
-    case "$PLATFORM" in
-        linux|wsl)
-            dotnet_executable="$(find_executable --filter has_dotnet_lts_sdk \
-                "${dotnet_root:+$dotnet_root/dotnet}" \
-                "$HOME/.dotnet/dotnet" \
-                "/usr/share/dotnet/dotnet" \
-                "/usr/lib/dotnet/dotnet" \
-                "/usr/lib64/dotnet/dotnet" \
-                "/usr/local/share/dotnet/dotnet" \
-                "/usr/local/bin/dotnet" \
-                "/usr/bin/dotnet")"
-            ;;
+    if [[ "$PLATFORM" == "windows" && -n "$WINDOWS_USER_PROFILE" ]]; then
+        dotnet_tools="$WINDOWS_USER_PROFILE/.dotnet/tools"
+    fi
 
-        windows)
-            if [[ -n "$dotnet_root" ]]; then
-                dotnet_root="$(windows_path_to_unix "$dotnet_root")" || return 1
-            fi
-
-            if [[ -n "$WINDOWS_USER_PROFILE" ]]; then
-                dotnet_tools="$WINDOWS_USER_PROFILE/.dotnet/tools"
-            fi
-
-            dotnet_executable="$(find_executable --filter has_dotnet_lts_sdk \
-                "${dotnet_root:+$dotnet_root/dotnet.exe}" \
-                "$WINDOWS_PROGRAM_FILES/dotnet/dotnet.exe" \
-                "${WINDOWS_LOCAL_APP_DATA:+$WINDOWS_LOCAL_APP_DATA/Microsoft/dotnet/dotnet.exe}" \
-                "$HOME/.dotnet/dotnet.exe")"
-            ;;
-
-        mac)
-            dotnet_executable="$(find_executable --filter has_dotnet_lts_sdk \
-                "${dotnet_root:+$dotnet_root/dotnet}" \
-                "$HOME/.dotnet/dotnet" \
-                "/usr/local/share/dotnet/dotnet" \
-                "/usr/local/share/dotnet/x64/dotnet" \
-                "/opt/homebrew/opt/dotnet@${DOTNET_LTS_VERSION}/libexec/dotnet" \
-                "/usr/local/opt/dotnet@${DOTNET_LTS_VERSION}/libexec/dotnet" \
-                "/opt/homebrew/opt/dotnet/libexec/dotnet" \
-                "/usr/local/opt/dotnet/libexec/dotnet" \
-                "/opt/homebrew/bin/dotnet" \
-                "/usr/local/bin/dotnet")"
-            ;;
-
-        *)
-            return 1
-            ;;
-    esac
-
-    [[ -n "$dotnet_executable" ]] || {
+    dotnet_executable="$(find_dotnet_executable)" || {
         printf '.NET SDK %s was installed, but its executable could not be found.\n' \
             "$DOTNET_LTS_VERSION"
         return 1

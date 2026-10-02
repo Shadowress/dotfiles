@@ -2,18 +2,20 @@ COMPONENT_NAMES=()
 COMPONENT_DISPLAY_NAMES=()
 COMPONENT_SETUP_FUNCTIONS=()
 COMPONENT_PLATFORMS=()
+COMPONENT_DEPENDENCIES=()
 
 register_component() {
     COMPONENT_NAMES+=("$1")
     COMPONENT_DISPLAY_NAMES+=("$2")
     COMPONENT_SETUP_FUNCTIONS+=("$3")
     COMPONENT_PLATFORMS+=("$4")
+    COMPONENT_DEPENDENCIES+=("${5:-}")
 }
 
 register_component "dotnet" ".NET SDK" "setup_dotnet" "all"
 register_component "git" "Git" "setup_git" "all"
 register_component "gcm" "Git Credential Manager" \
-    "setup_git_credential_manager" "all"
+    "setup_git_credential_manager" "all" "git"
 register_component "homebrew" "Homebrew" "setup_homebrew" "mac"
 register_component "nvim" "Neovim" "setup_nvim" "all"
 register_component "pyenv" "Python Version Manager" "setup_pyenv" "all"
@@ -46,6 +48,13 @@ component_platforms() {
 
     index="$(find_component_index "$1")" || return 1
     printf '%s' "${COMPONENT_PLATFORMS[$index]}"
+}
+
+component_dependencies() {
+    local index
+
+    index="$(find_component_index "$1")" || return 1
+    printf '%s' "${COMPONENT_DEPENDENCIES[$index]}"
 }
 
 platform_display_name() {
@@ -108,12 +117,18 @@ validate_component_registry() {
     local index
     local platform
     local platforms
+    local dependency
+    local dependency_index
+    local dependency_position
+    local dependencies
     local -a platform_list
+    local -a dependency_list
 
     if (( ${#COMPONENT_NAMES[@]} == 0 )) ||
         (( ${#COMPONENT_NAMES[@]} != ${#COMPONENT_DISPLAY_NAMES[@]} )) ||
         (( ${#COMPONENT_NAMES[@]} != ${#COMPONENT_SETUP_FUNCTIONS[@]} )) ||
-        (( ${#COMPONENT_NAMES[@]} != ${#COMPONENT_PLATFORMS[@]} )); then
+        (( ${#COMPONENT_NAMES[@]} != ${#COMPONENT_PLATFORMS[@]} )) ||
+        (( ${#COMPONENT_NAMES[@]} != ${#COMPONENT_DEPENDENCIES[@]} )); then
         argument_error "The component registry is inconsistent."
         return 1
     fi
@@ -148,6 +163,32 @@ validate_component_registry() {
                 "Component '$component' cannot combine 'all' with another platform."
             return 1
         fi
+
+        dependencies="${COMPONENT_DEPENDENCIES[$index]}"
+        [[ -z "$dependencies" ]] || {
+            IFS='|' read -r -a dependency_list <<< "$dependencies"
+            for ((dependency_position = 0;
+                dependency_position < ${#dependency_list[@]};
+                dependency_position++)); do
+                dependency="${dependency_list[$dependency_position]}"
+                dependency_index="$(find_component_index "$dependency")" || {
+                    argument_error \
+                        "Component '$component' has an unknown dependency: $dependency."
+                    return 1
+                }
+                (( dependency_index < index )) || {
+                    argument_error \
+                        "Component '$component' must be registered after dependency '$dependency'."
+                    return 1
+                }
+                component_in_list "$dependency" \
+                    "${dependency_list[@]:0:$dependency_position}" && {
+                    argument_error \
+                        "Component '$component' lists dependency '$dependency' more than once."
+                    return 1
+                }
+            done
+        }
     done
 
     for ((index = 0; index < ${#MINIMAL_COMPONENTS[@]}; index++)); do
@@ -201,11 +242,14 @@ resolve_component_selection() {
     local include_provided="false"
     local skip_provided="false"
     local component
+    local dependency
+    local dependencies
     local -a only_components=()
     local -a include_components=()
     local -a skip_components=()
     local -a remaining_components=()
     local -a available_components=()
+    local -a dependency_list=()
 
     validate_component_registry || return 1
     argument_was_provided "only" && only_provided="true"
@@ -282,6 +326,20 @@ resolve_component_selection() {
         fi
     done
     SELECTED_COMPONENTS=("${available_components[@]}")
+
+    for component in "${SELECTED_COMPONENTS[@]}"; do
+        dependencies="$(component_dependencies "$component")" || return 1
+        [[ -z "$dependencies" ]] || {
+            IFS='|' read -r -a dependency_list <<< "$dependencies"
+            for dependency in "${dependency_list[@]}"; do
+                component_in_list "$dependency" "${SELECTED_COMPONENTS[@]}" || {
+                    argument_error \
+                        "Component '$component' requires component '$dependency' to be selected."
+                    return 1
+                }
+            done
+        }
+    done
 }
 
 component_is_selected() {
@@ -291,8 +349,13 @@ component_is_selected() {
 setup_components() {
     local index
     local component
+    local dependency
+    local dependency_index
+    local dependencies
     local display_name
     local setup_function
+    local -a dependency_list
+    local -a results=()
 
     for ((index = 0; index < ${#COMPONENT_NAMES[@]}; index++)); do
         component="${COMPONENT_NAMES[$index]}"
@@ -302,9 +365,30 @@ setup_components() {
         setup_function="${COMPONENT_SETUP_FUNCTIONS[$index]}"
 
         if component_is_selected "$component"; then
-            run_setup "$display_name" "$setup_function" || :
+            dependencies="${COMPONENT_DEPENDENCIES[$index]}"
+            if [[ -n "$dependencies" ]]; then
+                IFS='|' read -r -a dependency_list <<< "$dependencies"
+                for dependency in "${dependency_list[@]}"; do
+                    dependency_index="$(find_component_index "$dependency")" || return 1
+                    [[ "${results[$dependency_index]:-}" == "succeeded" ]] || {
+                        SETUP_TOTAL=$((SETUP_TOTAL + 1))
+                        SETUP_FAILED=$((SETUP_FAILED + 1))
+                        print_status "ERROR" "$display_name" \
+                            "Dependency failed: $(component_display_name "$dependency")."
+                        results[$index]="failed"
+                        continue 2
+                    }
+                done
+            fi
+
+            if run_setup "$display_name" "$setup_function"; then
+                results[$index]="succeeded"
+            else
+                results[$index]="failed"
+            fi
         else
             print_status "INFO" "$display_name" "Not selected."
+            results[$index]="skipped"
         fi
     done
 }

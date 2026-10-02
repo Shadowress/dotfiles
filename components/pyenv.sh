@@ -6,15 +6,11 @@ setup_pyenv() {
 }
 
 find_pyenv_executable() {
-    local path_pyenv=""
     local pyenv_root="${PYENV_ROOT:-}"
-
-    path_pyenv="$(command -v pyenv 2>/dev/null)" || :
 
     case "$PLATFORM" in
         linux|wsl)
-            find_executable --filter is_executable_usable \
-                "$path_pyenv" \
+            find_executable --filter is_executable_usable "pyenv" \
                 "${pyenv_root:+$pyenv_root/bin/pyenv}" \
                 "$HOME/.pyenv/bin/pyenv" \
                 "/usr/local/bin/pyenv" \
@@ -22,8 +18,7 @@ find_pyenv_executable() {
             ;;
 
         windows)
-            find_executable --filter is_executable_usable \
-                "$path_pyenv" \
+            find_executable --filter is_executable_usable "pyenv" \
                 "$WINDOWS_USER_PROFILE/.pyenv/pyenv-win/bin/pyenv" \
                 "$WINDOWS_USER_PROFILE/.pyenv/pyenv-win/bin/pyenv.bat" \
                 "${WINDOWS_LOCAL_APP_DATA:+$WINDOWS_LOCAL_APP_DATA/pyenv/pyenv-win/bin/pyenv}" \
@@ -31,8 +26,7 @@ find_pyenv_executable() {
             ;;
 
         mac)
-            find_executable --filter is_executable_usable \
-                "$path_pyenv" \
+            find_executable --filter is_executable_usable "pyenv" \
                 "/opt/homebrew/bin/pyenv" \
                 "/usr/local/bin/pyenv" \
                 "${pyenv_root:+$pyenv_root/bin/pyenv}" \

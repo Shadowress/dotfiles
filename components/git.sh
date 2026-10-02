@@ -5,8 +5,42 @@ setup_git() {
         configure_git_settings
 }
 
+find_git_executable() {
+    case "$PLATFORM" in
+        linux|wsl)
+            find_executable --filter is_executable_usable "git" \
+                "/usr/local/bin/git" \
+                "/usr/bin/git"
+            ;;
+
+        windows)
+            find_executable --filter is_executable_usable "git" \
+                "/usr/bin/git" \
+                "/ucrt64/bin/git.exe" \
+                "/mingw64/bin/git.exe" \
+                "/clangarm64/bin/git.exe" \
+                "$WINDOWS_PROGRAM_FILES/Git/cmd/git.exe" \
+                "$WINDOWS_PROGRAM_FILES/Git/bin/git.exe" \
+                "${WINDOWS_LOCAL_APP_DATA:+$WINDOWS_LOCAL_APP_DATA/Programs/Git/cmd/git.exe}" \
+                "${WINDOWS_LOCAL_APP_DATA:+$WINDOWS_LOCAL_APP_DATA/Programs/Git/bin/git.exe}" \
+                "${WINDOWS_LOCAL_APP_DATA:+$WINDOWS_LOCAL_APP_DATA/Microsoft/WinGet/Links/git.exe}"
+            ;;
+
+        mac)
+            find_executable --filter is_executable_usable "git" \
+                "/opt/homebrew/bin/git" \
+                "/usr/local/bin/git" \
+                "/usr/bin/git"
+            ;;
+
+        *)
+            return 1
+            ;;
+    esac
+}
+
 install_git() {
-    ! is_command_in_path "git" || return 0
+    ! find_git_executable &>/dev/null || return 0
 
     case "$PLATFORM" in
         linux|wsl)
@@ -57,39 +91,7 @@ install_git() {
 configure_git_environment() {
     local git_executable
 
-    case "$PLATFORM" in
-        linux|wsl)
-            git_executable="$(find_executable \
-                "/usr/local/bin/git" \
-                "/usr/bin/git")"
-            ;;
-
-        windows)
-            git_executable="$(find_executable \
-                "/usr/bin/git" \
-                "/ucrt64/bin/git.exe" \
-                "/mingw64/bin/git.exe" \
-                "/clangarm64/bin/git.exe" \
-                "$WINDOWS_PROGRAM_FILES/Git/cmd/git.exe" \
-                "$WINDOWS_PROGRAM_FILES/Git/bin/git.exe" \
-                "${WINDOWS_LOCAL_APP_DATA:+$WINDOWS_LOCAL_APP_DATA/Programs/Git/cmd/git.exe}" \
-                "${WINDOWS_LOCAL_APP_DATA:+$WINDOWS_LOCAL_APP_DATA/Programs/Git/bin/git.exe}" \
-                "${WINDOWS_LOCAL_APP_DATA:+$WINDOWS_LOCAL_APP_DATA/Microsoft/WinGet/Links/git.exe}")"
-            ;;
-
-        mac)
-            git_executable="$(find_executable \
-                "/opt/homebrew/bin/git" \
-                "/usr/local/bin/git" \
-                "/usr/bin/git")"
-            ;;
-
-        *)
-            return 1
-            ;;
-    esac
-
-    [[ -n "$git_executable" ]] || {
+    git_executable="$(find_git_executable)" || {
         printf 'Git was installed, but its executable could not be found.\n'
         return 1
     }
@@ -104,6 +106,7 @@ configure_git_environment() {
 
 configure_git_settings() {
     local shared_config="$DOTFILES/config/git/.gitconfig"
+    local status=0
 
     if [[ "$PLATFORM" == "windows" ]]; then
         shared_config="$(cygpath -m "$shared_config")" || return 1
@@ -117,7 +120,9 @@ configure_git_settings() {
         return
     fi
 
-    touch "$DOTFILES/config/git/.gitconfig.local" &&
-        link_path "$shared_config" "$HOME/.gitconfig" &&
-        link_path "$DOTFILES/config/git/.gitconfig.local" "$HOME/.gitconfig.local"
+    touch "$DOTFILES/config/git/.gitconfig.local" || return 1
+    link_path "$shared_config" "$HOME/.gitconfig" || status=1
+    link_path "$DOTFILES/config/git/.gitconfig.local" \
+        "$HOME/.gitconfig.local" || status=1
+    return "$status"
 }

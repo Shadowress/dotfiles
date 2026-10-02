@@ -87,7 +87,10 @@ The file must define the setup function that will be registered, for example:
 
 ```bash
 setup_example() {
-    # Perform an idempotent setup.
+    run_steps \
+        install_example \
+        configure_example_environment \
+        configure_example_settings
 }
 ```
 
@@ -96,7 +99,7 @@ setup_example() {
 Add one line to the registry in `lib/components.sh`:
 
 ```bash
-register_component "example" "Example Tool" "setup_example" "mac"
+register_component "example" "Example Tool" "setup_example" "mac" "git"
 ```
 
 | Field | Example | Purpose |
@@ -105,6 +108,7 @@ register_component "example" "Example Tool" "setup_example" "mac"
 | Display name | `Example Tool` | Human-readable name used in help and status output |
 | Setup function | `setup_example` | Function called when the component is selected |
 | Platforms | `mac` | Environments where the component is available |
+| Dependencies | `git` | Optional pipe-delimited components that must be selected and succeed first |
 
 Platform metadata accepts these values:
 
@@ -118,6 +122,10 @@ The registry drives valid-name checks, platform validation, component
 selection, setup dispatch, and help output. Explicitly selecting an unavailable
 platform-specific component fails before setup starts; unavailable components
 in the default selection are omitted automatically.
+
+Register dependencies before their dependents. A dependency must be selected
+with its dependent, and a failed dependency prevents the dependent setup from
+running against incomplete state.
 
 ### 3. Add component-specific arguments when needed
 

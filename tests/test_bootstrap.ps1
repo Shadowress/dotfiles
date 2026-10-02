@@ -93,6 +93,23 @@ Invoke-Test -Name 'Git and Git Bash are discovered' -Test {
         (Test-Program -Path $script:BashPath -Arguments @('--version'))
 }
 
+Invoke-Test -Name 'Windows junction links are idempotent and updateable' -Test {
+    $temporaryRoot = New-TestDirectory
+    try {
+        New-Item -ItemType Directory -Path `
+            (Join-Path $temporaryRoot 'source-one') | Out-Null
+        New-Item -ItemType Directory -Path `
+            (Join-Path $temporaryRoot 'source-two') | Out-Null
+        $testScript = Join-Path $PSScriptRoot 'test_windows_link.sh'
+
+        & $script:BashPath $testScript $temporaryRoot $TestRoot
+        return $LASTEXITCODE -eq 0
+    }
+    finally {
+        Remove-TestDirectory -Path $temporaryRoot
+    }
+}
+
 Invoke-Test -Name 'existing repository succeeds and arguments stay literal' -Test {
     $temporaryRoot = New-TestDirectory
     try {
